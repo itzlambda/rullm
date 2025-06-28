@@ -1,5 +1,5 @@
 use rullm_core::error::LlmError;
-use rullm_core::providers::{Provider, ProviderExt};
+use rullm_core::providers::Provider;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;

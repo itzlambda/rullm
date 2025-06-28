@@ -154,8 +154,24 @@ impl AnthropicProvider {
 
 #[async_trait::async_trait]
 impl LlmProvider for AnthropicProvider {
-    fn provider_name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "anthropic"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["anthropic", "claude"]
+    }
+
+    fn env_key(&self) -> &'static str {
+        "ANTHROPIC_API_KEY"
+    }
+
+    fn default_base_url(&self) -> Option<&'static str> {
+        Some("https://api.anthropic.com/v1")
+    }
+
+    fn provider_name(&self) -> &'static str {
+        self.name()
     }
 
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {

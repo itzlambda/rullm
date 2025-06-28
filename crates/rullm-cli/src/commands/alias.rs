@@ -4,7 +4,6 @@ use crate::constants::ALIASES_CONFIG_FILE;
 use crate::output::OutputLevel;
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use rullm_core::providers::ProviderExt;
 
 use std::path::Path;
 
@@ -223,7 +222,7 @@ async fn show_alias(config_path: &Path, alias: &str, output_level: OutputLevel) 
         match resolver.resolve(alias) {
             Ok((provider, model)) => {
                 crate::output::note(
-                    &format!("Resolves to: {} / {}", provider.name(), model),
+                    &format!("Resolves to: {provider} / {model}"),
                     output_level,
                 );
             }

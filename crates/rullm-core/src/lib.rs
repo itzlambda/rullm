@@ -171,5 +171,3 @@ pub use utils::test_helpers;
 
 // Re-export commonly used types
 pub use serde::{Deserialize, Serialize};
-
-pub use providers::ProviderExt;

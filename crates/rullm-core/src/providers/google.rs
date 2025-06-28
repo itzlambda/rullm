@@ -204,8 +204,24 @@ impl GoogleProvider {
 
 #[async_trait::async_trait]
 impl LlmProvider for GoogleProvider {
-    fn provider_name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "google"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["google", "gemini"]
+    }
+
+    fn env_key(&self) -> &'static str {
+        "GOOGLE_AI_API_KEY"
+    }
+
+    fn default_base_url(&self) -> Option<&'static str> {
+        Some("https://generativelanguage.googleapis.com/v1beta")
+    }
+
+    fn provider_name(&self) -> &'static str {
+        self.name()
     }
 
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {

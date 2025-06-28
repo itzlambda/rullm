@@ -163,8 +163,24 @@ impl OpenAIProvider {
 
 #[async_trait::async_trait]
 impl LlmProvider for OpenAIProvider {
-    fn provider_name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         "openai"
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &["openai", "gpt"]
+    }
+
+    fn env_key(&self) -> &'static str {
+        "OPENAI_API_KEY"
+    }
+
+    fn default_base_url(&self) -> Option<&'static str> {
+        Some("https://api.openai.com/v1")
+    }
+
+    fn provider_name(&self) -> &'static str {
+        self.name()
     }
 
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {

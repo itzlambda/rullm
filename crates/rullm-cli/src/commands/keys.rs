@@ -7,7 +7,7 @@ use crate::{
     args::{Cli, CliConfig},
     output::OutputLevel,
 };
-use rullm_core::{Provider, providers::ProviderExt};
+use rullm_core::Provider;
 
 #[derive(Args)]
 pub struct KeysArgs {
@@ -47,7 +47,7 @@ impl KeysArgs {
                     key.clone()
                 } else {
                     use std::io::{self, Write};
-                    print!("Enter API key for {}: ", provider.name());
+                    print!("Enter API key for {provider}: ");
                     io::stdout().flush()?;
 
                     let mut input = String::new();
@@ -64,7 +64,7 @@ impl KeysArgs {
                 cli_config.save_api_keys()?;
 
                 crate::output::success(
-                    &format!("API key for {} has been saved", provider.name()),
+                    &format!("API key for {provider} has been saved"),
                     output_level,
                 );
             }
@@ -74,7 +74,7 @@ impl KeysArgs {
                 cli_config.save_api_keys()?;
 
                 crate::output::success(
-                    &format!("API key for {} has been deleted", provider.name()),
+                    &format!("API key for {provider} has been deleted"),
                     output_level,
                 );
             }

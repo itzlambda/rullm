@@ -1,4 +1,4 @@
-use rullm_core::{Provider, error::LlmError, providers::ProviderExt};
+use rullm_core::{Provider, error::LlmError};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
