@@ -1,0 +1,71 @@
+[package]
+name = "rullm-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+tower.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+bytes.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tower-service.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+async-stream.workspace = true
+clap.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+toml.workspace = true
+metrics.workspace = true
+once_cell.workspace = true
+
+[dev-dependencies]
+tokio-test.workspace = true
+tracing-subscriber.workspace = true
+tempfile.workspace = true
+
+[[example]]
+name = "openai_basic"
+path = "examples/openai_basic.rs"
+
+[[example]]
+name = "openai_simple"
+path = "examples/openai_simple.rs"
+
+[[example]]
+name = "openai_config"
+path = "examples/openai_config.rs"
+
+[[example]]
+name = "test_all_providers"
+path = "examples/test_all_providers.rs"
+
+[[example]]
+name = "anthropic_simple"
+path = "examples/anthropic_simple.rs"
+
+[[example]]
+name = "google_simple"
+path = "examples/google_simple.rs"
+
+[[example]]
+name = "openai_conversation"
+path = "examples/openai_conversation.rs"
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[[example]]
+name = "middleware_usage"
+path = "examples/middleware_usage.rs"
+
+[[example]]
+name = "simple_usage"
+path = "examples/simple_usage.rs"

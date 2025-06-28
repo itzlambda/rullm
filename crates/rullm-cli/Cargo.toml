@@ -1,0 +1,39 @@
+[package]
+name = "rullm-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+# Depend on the lib crate
+rullm-core = { package = "rullm-core", path = "../rullm-core" }
+
+futures.workspace = true
+
+# CLI-specific dependencies
+clap.workspace = true
+clap_complete = { workspace = true }
+tracing.workspace = true
+tracing-subscriber.workspace = true
+owo-colors.workspace = true
+atty.workspace = true
+toml.workspace = true
+etcetera.workspace = true
+serde.workspace = true
+tokio.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+reedline.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bin]]
+name = "rullm"
+path = "src/main.rs"
