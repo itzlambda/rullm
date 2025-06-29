@@ -9,6 +9,7 @@ mod commands;
 mod config;
 mod constants;
 mod output;
+mod provider;
 
 use anyhow::Result;
 use args::{Cli, CliConfig};

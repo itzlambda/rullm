@@ -1,4 +1,5 @@
-use rullm_core::{Provider, error::LlmError};
+use crate::provider::Provider;
+use rullm_core::error::LlmError;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

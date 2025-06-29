@@ -2,12 +2,12 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 use strum::IntoEnumIterator;
 
+use crate::provider::Provider;
 use crate::{
     api_keys::ApiKeys,
     args::{Cli, CliConfig},
     output::OutputLevel,
 };
-use rullm_core::Provider;
 
 #[derive(Args)]
 pub struct KeysArgs {

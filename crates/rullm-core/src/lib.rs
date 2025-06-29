@@ -156,7 +156,6 @@ mod tests;
 pub use config::{AnthropicConfig, ConfigBuilder, GoogleAiConfig, OpenAIConfig, ProviderConfig};
 pub use error::LlmError;
 pub use middleware::{LlmServiceBuilder, MiddlewareConfig, MiddlewareStack, RateLimit};
-pub use providers::Provider;
 pub use providers::{AnthropicProvider, GoogleProvider, OpenAIProvider};
 pub use simple::{DefaultModels, SimpleLlm, SimpleLlmBuilder, SimpleLlmClient, SimpleLlmConfig};
 pub use types::{
