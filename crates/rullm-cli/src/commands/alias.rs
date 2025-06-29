@@ -221,10 +221,7 @@ async fn show_alias(config_path: &Path, alias: &str, output_level: OutputLevel) 
         // Try to resolve it through the resolver to show effective resolution
         match resolver.resolve(alias) {
             Ok((provider, model)) => {
-                crate::output::note(
-                    &format!("Resolves to: {provider} / {model}"),
-                    output_level,
-                );
+                crate::output::note(&format!("Resolves to: {provider} / {model}"), output_level);
             }
             Err(e) => {
                 crate::output::error(&format!("Resolution error: {e}"), output_level);
