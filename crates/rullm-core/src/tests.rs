@@ -30,8 +30,20 @@ impl MockProvider {
 
 #[async_trait::async_trait]
 impl LlmProvider for MockProvider {
-    fn provider_name(&self) -> &'static str {
-        self.name
+    fn name(&self) -> &'static str {
+        ""
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn default_base_url(&self) -> Option<&'static str> {
+        Some("")
+    }
+
+    fn env_key(&self) -> &'static str {
+        ""
     }
 
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {
@@ -101,7 +113,7 @@ impl ChatProvider for MockProvider {
 async fn test_mock_provider_basic_functionality() {
     let provider = MockProvider::new("test");
 
-    assert_eq!(provider.provider_name(), "test");
+    assert_eq!(provider.name(), "test");
 
     let models = provider.available_models().await.unwrap();
     assert_eq!(models, vec!["model-1", "model-2"]);
@@ -674,7 +686,7 @@ async fn test_openai_request_conversion() {
 
     // We can't easily test the private method, but we can verify
     // the provider was created successfully and implements the traits
-    assert_eq!(provider.provider_name(), "openai");
+    assert_eq!(provider.name(), "openai");
 }
 
 #[tokio::test]
@@ -782,7 +794,7 @@ fn test_google_request_format() {
     // We can't easily test the private method directly, but we can verify
     // the provider was created successfully and test the format indirectly
     // by testing the available functionality
-    assert_eq!(provider.provider_name(), "google");
+    assert_eq!(provider.name(), "google");
 
     // The request should have system message separated from user/assistant messages
     let system_messages: Vec<_> = request
@@ -824,7 +836,7 @@ fn test_anthropic_request_format() {
     // We can't easily test the private method directly, but we can verify
     // the provider was created successfully and test the format indirectly
     // by testing the available functionality
-    assert_eq!(provider.provider_name(), "anthropic");
+    assert_eq!(provider.name(), "anthropic");
 
     // The request should have system message separated from user/assistant messages
     let system_messages: Vec<_> = request
@@ -964,8 +976,20 @@ impl MockFailingProvider {
 
 #[async_trait::async_trait]
 impl LlmProvider for MockFailingProvider {
-    fn provider_name(&self) -> &'static str {
+    fn name(&self) -> &'static str {
         self.name
+    }
+
+    fn aliases(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn default_base_url(&self) -> Option<&'static str> {
+        Some("")
+    }
+
+    fn env_key(&self) -> &'static str {
+        ""
     }
 
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {

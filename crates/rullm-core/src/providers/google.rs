@@ -220,10 +220,6 @@ impl LlmProvider for GoogleProvider {
         Some("https://generativelanguage.googleapis.com/v1beta")
     }
 
-    fn provider_name(&self) -> &'static str {
-        self.name()
-    }
-
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {
         let url = format!(
             "{}/models?key={}",

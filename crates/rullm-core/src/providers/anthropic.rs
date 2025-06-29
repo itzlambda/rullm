@@ -170,10 +170,6 @@ impl LlmProvider for AnthropicProvider {
         Some("https://api.anthropic.com/v1")
     }
 
-    fn provider_name(&self) -> &'static str {
-        self.name()
-    }
-
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {
         let url = format!("{}/v1/models", self.config.base_url().trim_end_matches('/'));
 

@@ -596,9 +596,9 @@ impl SimpleLlm for SimpleLlmClient {
 
     fn provider_name(&self) -> &'static str {
         match self {
-            SimpleLlmClient::OpenAI { provider, .. } => provider.provider_name(),
-            SimpleLlmClient::Anthropic { provider, .. } => provider.provider_name(),
-            SimpleLlmClient::Google { provider, .. } => provider.provider_name(),
+            SimpleLlmClient::OpenAI { provider, .. } => provider.name(),
+            SimpleLlmClient::Anthropic { provider, .. } => provider.name(),
+            SimpleLlmClient::Google { provider, .. } => provider.name(),
         }
     }
 }

@@ -92,7 +92,7 @@ async fn test_openai_provider() -> Result<Vec<String>, Box<dyn std::error::Error
     let provider = OpenAIProvider::new(config)?;
 
     // Test provider info
-    println!("   Provider name: {}", provider.provider_name());
+    println!("   Provider name: {}", provider.name());
 
     // Test health check
     match provider.health_check().await {
@@ -124,7 +124,7 @@ async fn test_anthropic_provider() -> Result<Vec<String>, Box<dyn std::error::Er
     let provider = AnthropicProvider::new(config)?;
 
     // Test provider info
-    println!("   Provider name: {}", provider.provider_name());
+    println!("   Provider name: {}", provider.name());
 
     // Test health check
     match provider.health_check().await {
@@ -156,7 +156,7 @@ async fn test_google_provider() -> Result<Vec<String>, Box<dyn std::error::Error
     let provider = GoogleProvider::new(config)?;
 
     // Test provider info
-    println!("   Provider name: {}", provider.provider_name());
+    println!("   Provider name: {}", provider.name());
 
     // Test health check
     match provider.health_check().await {

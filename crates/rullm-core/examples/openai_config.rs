@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match OpenAIProvider::new(env_config) {
                         Ok(provider) => {
                             println!("   ✅ Provider created successfully");
-                            println!("   Provider name: {}", provider.provider_name());
+                            println!("   Provider name: {}", provider.name());
 
                             // Test health check
                             match provider.health_check().await {

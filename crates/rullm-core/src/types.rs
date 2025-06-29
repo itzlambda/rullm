@@ -86,29 +86,16 @@ impl Default for StreamConfig {
 #[async_trait::async_trait]
 pub trait LlmProvider: Send + Sync {
     /// Canonical provider identifier (e.g. "openai", "anthropic").
-    fn name(&self) -> &'static str {
-        "unknown"
-    }
+    fn name(&self) -> &'static str;
 
     /// Alternative identifiers that should map to this provider (e.g. ["gpt"], ["claude"], ...).
-    fn aliases(&self) -> &'static [&'static str] {
-        &[]
-    }
+    fn aliases(&self) -> &'static [&'static str];
 
     /// Environment variable expected to contain the provider API key.
-    fn env_key(&self) -> &'static str {
-        ""
-    }
+    fn env_key(&self) -> &'static str;
 
     /// Default base URL used when no explicit endpoint is supplied.
-    fn default_base_url(&self) -> Option<&'static str> {
-        None
-    }
-
-    /// Get the provider name. Temporary shim delegating to `name()` so existing code compiles.
-    fn provider_name(&self) -> &'static str {
-        self.name()
-    }
+    fn default_base_url(&self) -> Option<&'static str>;
 
     /// Get available models for this provider
     async fn available_models(&self) -> Result<Vec<String>, LlmError>;

@@ -179,10 +179,6 @@ impl LlmProvider for OpenAIProvider {
         Some("https://api.openai.com/v1")
     }
 
-    fn provider_name(&self) -> &'static str {
-        self.name()
-    }
-
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {
         let url = format!("{}/models", self.config.base_url());
 

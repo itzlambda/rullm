@@ -778,7 +778,7 @@ where
         request: ChatRequest,
         config: Option<StreamConfig>,
     ) -> StreamResult<ChatStreamEvent> {
-        let provider_name = self.provider.provider_name().to_string();
+        let provider_name = self.provider.name().to_string();
 
         if self.config.enable_logging {
             log::info!(
