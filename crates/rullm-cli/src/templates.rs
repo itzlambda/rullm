@@ -92,6 +92,7 @@ impl Template {
     }
 
     /// Get all placeholders required by this template
+    #[allow(dead_code)]
     pub fn get_placeholders(&self) -> Vec<String> {
         let mut placeholders = extract_placeholders(&self.user_prompt);
 
@@ -202,7 +203,7 @@ impl TemplateStore {
 
     /// Delete a template file from disk. Returns true if deleted.
     pub fn delete(&mut self, name: &str) -> Result<bool> {
-        let file_path = self.templates_dir.join(format!("{}.toml", name));
+        let file_path = self.templates_dir.join(format!("{name}.toml"));
 
         if !file_path.exists() {
             // Nothing to delete
@@ -234,6 +235,7 @@ impl TemplateStore {
     }
 
     /// Get the templates directory path
+    #[allow(dead_code)]
     pub fn templates_dir(&self) -> &Path {
         &self.templates_dir
     }
