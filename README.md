@@ -17,7 +17,6 @@ rullm --model gemini "What's the weather like?"
 
 # Use templates for structured queries ({{input}} placeholder is automatically filled)
 rullm -t code-review "Review this function"
-rullm -t greeting --param name=Alice "Welcome message"
 
 # Interactive chat
 rullm chat --model claude
