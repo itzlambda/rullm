@@ -343,4 +343,208 @@ mod tests {
         assert_eq!(loaded.name, "test");
         assert_eq!(loaded.user_prompt, "Hello {{name}}");
     }
+
+    #[test]
+    fn test_template_with_defaults() {
+        let mut template = Template::new(
+            "greeting".to_string(),
+            "Hello {{name}}, {{greeting}}!".to_string(),
+        );
+        template
+            .defaults
+            .insert("greeting".to_string(), "how are you".to_string());
+
+        let mut params = HashMap::new();
+        params.insert("name".to_string(), "Alice".to_string());
+
+        let rendered = template.render(&params).unwrap();
+        assert_eq!(rendered.user_prompt, "Hello Alice, how are you!");
+    }
+
+    #[test]
+    fn test_template_param_override_defaults() {
+        let mut template = Template::new(
+            "greeting".to_string(),
+            "Hello {{name}}, {{greeting}}!".to_string(),
+        );
+        template
+            .defaults
+            .insert("greeting".to_string(), "how are you".to_string());
+
+        let mut params = HashMap::new();
+        params.insert("name".to_string(), "Bob".to_string());
+        params.insert("greeting".to_string(), "welcome".to_string()); // Override default
+
+        let rendered = template.render(&params).unwrap();
+        assert_eq!(rendered.user_prompt, "Hello Bob, welcome!");
+    }
+
+    #[test]
+    fn test_template_with_system_prompt() {
+        let template = Template {
+            name: "assistant".to_string(),
+            system_prompt: Some("You are a helpful {{role}} assistant. Be {{tone}}.".to_string()),
+            user_prompt: "Help me with {{task}}".to_string(),
+            defaults: [("tone".to_string(), "professional".to_string())].into(),
+            description: Some("Assistant template".to_string()),
+        };
+
+        let mut params = HashMap::new();
+        params.insert("role".to_string(), "coding".to_string());
+        params.insert("task".to_string(), "debugging".to_string());
+
+        let rendered = template.render(&params).unwrap();
+        assert_eq!(
+            rendered.system_prompt,
+            Some("You are a helpful coding assistant. Be professional.".to_string())
+        );
+        assert_eq!(rendered.user_prompt, "Help me with debugging");
+    }
+
+    #[test]
+    fn test_extract_placeholders_edge_cases() {
+        // Malformed placeholders should be ignored
+        assert_eq!(extract_placeholders("{{"), Vec::<String>::new());
+        assert_eq!(extract_placeholders("}}"), Vec::<String>::new());
+        assert_eq!(extract_placeholders("{single}"), Vec::<String>::new());
+        assert_eq!(
+            extract_placeholders("{{invalid char}}"),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            extract_placeholders("{{invalid-space }}"),
+            Vec::<String>::new()
+        );
+
+        // Valid placeholders with underscores and hyphens
+        assert_eq!(extract_placeholders("{{valid_name}}"), vec!["valid_name"]);
+        assert_eq!(extract_placeholders("{{valid-name}}"), vec!["valid-name"]);
+        assert_eq!(extract_placeholders("{{name123}}"), vec!["name123"]);
+
+        // Mixed valid and invalid
+        assert_eq!(
+            extract_placeholders("{{valid}} and {{invalid char}} and {{also_valid}}"),
+            vec!["valid", "also_valid"]
+        );
+    }
+
+    #[test]
+    fn test_template_get_placeholders() {
+        let template = Template {
+            name: "test".to_string(),
+            system_prompt: Some("System: {{role}} with {{mood}}".to_string()),
+            user_prompt: "User: {{input}} for {{task}}".to_string(),
+            defaults: HashMap::new(),
+            description: None,
+        };
+
+        let placeholders = template.get_placeholders();
+        let mut sorted_placeholders = placeholders;
+        sorted_placeholders.sort();
+        assert_eq!(sorted_placeholders, vec!["input", "mood", "role", "task"]);
+    }
+
+    #[test]
+    fn test_template_store_multiple_templates() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut store = TemplateStore::new(temp_dir.path());
+
+        // Create multiple templates
+        let template1 = Template::new("first".to_string(), "First: {{value}}".to_string());
+        let template2 = Template::new("second".to_string(), "Second: {{other}}".to_string());
+
+        store.save(&template1).unwrap();
+        store.save(&template2).unwrap();
+        store.load().unwrap();
+
+        assert_eq!(store.list().len(), 2);
+        assert!(store.contains("first"));
+        assert!(store.contains("second"));
+        assert!(!store.contains("nonexistent"));
+
+        let names = store.list();
+        assert!(names.contains(&"first".to_string()));
+        assert!(names.contains(&"second".to_string()));
+    }
+
+    #[test]
+    fn test_template_store_invalid_toml_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut store = TemplateStore::new(temp_dir.path());
+
+        // Create a valid template file
+        let template = Template::new("valid".to_string(), "Valid: {{test}}".to_string());
+        store.save(&template).unwrap();
+
+        // Create an invalid TOML file manually
+        let invalid_path = temp_dir.path().join("invalid.toml");
+        std::fs::write(&invalid_path, "invalid toml content [[[").unwrap();
+
+        // Loading should succeed but skip the invalid file (with warning)
+        store.load().unwrap();
+        assert_eq!(store.list().len(), 1);
+        assert!(store.contains("valid"));
+        assert!(!store.contains("invalid"));
+    }
+
+    #[test]
+    fn test_template_rendering_empty_strings() {
+        let template = Template {
+            name: "test".to_string(),
+            system_prompt: Some("".to_string()),
+            user_prompt: "Hello {{name}}".to_string(),
+            defaults: HashMap::new(),
+            description: None,
+        };
+
+        let mut params = HashMap::new();
+        params.insert("name".to_string(), "".to_string());
+
+        let rendered = template.render(&params).unwrap();
+        assert_eq!(rendered.system_prompt, Some("".to_string()));
+        assert_eq!(rendered.user_prompt, "Hello ");
+    }
+
+    #[test]
+    fn test_template_multiple_missing_placeholders() {
+        let template = Template {
+            name: "test".to_string(),
+            system_prompt: Some("System {{a}} {{b}}".to_string()),
+            user_prompt: "User {{c}} {{d}}".to_string(),
+            defaults: HashMap::new(),
+            description: None,
+        };
+
+        let params = HashMap::new();
+        let result = template.render(&params);
+        assert!(result.is_err());
+
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("Missing required placeholders"));
+        // Should contain all missing placeholders
+        assert!(error_msg.contains("a"));
+        assert!(error_msg.contains("b"));
+        assert!(error_msg.contains("c"));
+        assert!(error_msg.contains("d"));
+    }
+
+    #[test]
+    fn test_template_store_templates_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let store = TemplateStore::new(temp_dir.path());
+
+        assert_eq!(store.templates_dir(), temp_dir.path().join("templates"));
+    }
+
+    #[test]
+    fn test_template_complex_placeholders() {
+        let template_str = "Start {{first}} middle {{second}} {{first}} end {{third}}";
+        let placeholders = extract_placeholders(template_str);
+
+        // Should deduplicate placeholders
+        assert_eq!(placeholders.len(), 3);
+        assert!(placeholders.contains(&"first".to_string()));
+        assert!(placeholders.contains(&"second".to_string()));
+        assert!(placeholders.contains(&"third".to_string()));
+    }
 }
