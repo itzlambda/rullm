@@ -66,7 +66,7 @@ impl Template {
 
             match value {
                 Some(val) => {
-                    let pattern = format!("{{{{{}}}}}", placeholder);
+                    let pattern = format!("{{{{{placeholder}}}}}");
                     rendered_user = rendered_user.replace(&pattern, val);
                     if let Some(ref mut system) = rendered_system {
                         *system = system.replace(&pattern, val);
@@ -156,7 +156,7 @@ impl TemplateStore {
                         self.templates.insert(template.name.clone(), template);
                     }
                     Err(e) => {
-                        eprintln!("Warning: Failed to load template {:?}: {}", path, e);
+                        eprintln!("Warning: Failed to load template {path:?}: {e}");
                     }
                 }
             }
@@ -168,10 +168,10 @@ impl TemplateStore {
     /// Load a single template file
     fn load_template_file(&self, path: &Path) -> Result<Template> {
         let content = fs::read_to_string(path)
-            .with_context(|| format!("Failed to read template file: {:?}", path))?;
+            .with_context(|| format!("Failed to read template file: {path:?}"))?;
 
         let template: Template = toml::from_str(&content)
-            .with_context(|| format!("Failed to parse template file: {:?}", path))?;
+            .with_context(|| format!("Failed to parse template file: {path:?}"))?;
 
         Ok(template)
     }
@@ -192,10 +192,10 @@ impl TemplateStore {
 
         // Atomic write: write to temp file then rename
         fs::write(&temp_path, content)
-            .with_context(|| format!("Failed to write temporary template file: {:?}", temp_path))?;
+            .with_context(|| format!("Failed to write temporary template file: {temp_path:?}"))?;
 
         fs::rename(&temp_path, &file_path)
-            .with_context(|| format!("Failed to rename template file: {:?}", file_path))?;
+            .with_context(|| format!("Failed to rename template file: {file_path:?}"))?;
 
         Ok(())
     }

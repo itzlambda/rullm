@@ -18,6 +18,8 @@ use clap::{CommandFactory, Parser};
 use cli_helpers::resolve_direct_query_model;
 use commands::Commands;
 use output::OutputLevel;
+use std::collections::HashMap;
+use templates::TemplateStore;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -62,8 +64,8 @@ pub async fn run() -> Result<()> {
     }
 
     // Validate that template and param flags are only used for quick-query mode
-    if cli.template.is_some() || !cli.param.is_empty() {
-        if cli.command.is_some() {
+    if (cli.template.is_some() || !cli.param.is_empty())
+        && cli.command.is_some() {
             use clap::error::ErrorKind;
 
             let mut cmd = Cli::command();
@@ -74,11 +76,10 @@ pub async fn run() -> Result<()> {
             };
             cmd.error(
                 ErrorKind::UnknownArgument,
-                format!("unexpected argument {} found when using subcommands", flag),
+                format!("unexpected argument {flag} found when using subcommands"),
             )
             .exit();
         }
-    }
 
     // Handle commands
     match &cli.command {
@@ -93,9 +94,42 @@ pub async fn run() -> Result<()> {
                 let model_str =
                     resolve_direct_query_model(&cli.model, &cli_config.config.default_model)?;
                 let client = client::from_model(&model_str, &cli, &cli_config)?;
-                commands::run_single_query(&client, query, None, !cli.no_streaming)
-                    .await
-                    .map_err(anyhow::Error::from)?;
+
+                // Handle template if provided
+                let (system_prompt, final_query) = if let Some(template_name) = &cli.template {
+                    // Load template store
+                    let mut template_store = TemplateStore::new(&cli_config.config_base_path);
+                    template_store
+                        .load()
+                        .map_err(|e| anyhow::anyhow!("Failed to load templates: {}", e))?;
+
+                    // Get the template
+                    let template = template_store
+                        .get(template_name)
+                        .ok_or_else(|| anyhow::anyhow!("Template '{}' not found", template_name))?;
+
+                    // Build parameters from --param flags and add the input
+                    let mut params: HashMap<String, String> = cli.param.iter().cloned().collect();
+                    params.insert("input".to_string(), query.clone());
+
+                    // Render the template
+                    let rendered = template.render(&params).map_err(|e| {
+                        anyhow::anyhow!("Failed to render template '{}': {}", template_name, e)
+                    })?;
+
+                    (rendered.system_prompt, rendered.user_prompt)
+                } else {
+                    (None, query.clone())
+                };
+
+                commands::run_single_query(
+                    &client,
+                    &final_query,
+                    system_prompt.as_deref(),
+                    !cli.no_streaming,
+                )
+                .await
+                .map_err(anyhow::Error::from)?;
             } else {
                 eprintln!("Error: No query provided. Use --help for usage information.");
                 std::process::exit(1);
