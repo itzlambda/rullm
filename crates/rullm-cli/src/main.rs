@@ -61,6 +61,25 @@ pub async fn run() -> Result<()> {
         }
     }
 
+    // Validate that template and param flags are only used for quick-query mode
+    if cli.template.is_some() || !cli.param.is_empty() {
+        if cli.command.is_some() {
+            use clap::error::ErrorKind;
+
+            let mut cmd = Cli::command();
+            let flag = if cli.template.is_some() {
+                "'-t/--template'"
+            } else {
+                "'--param'"
+            };
+            cmd.error(
+                ErrorKind::UnknownArgument,
+                format!("unexpected argument {} found when using subcommands", flag),
+            )
+            .exit();
+        }
+    }
+
     // Handle commands
     match &cli.command {
         Some(Commands::Chat(args)) => args.run(output_level, &cli_config, &cli).await?,
