@@ -208,7 +208,11 @@ impl TemplateStore {
     }
 
     /// Save a template to disk
-    pub fn save(&self, template: &Template) -> Result<()> {
+    pub fn save(&mut self, template: &Template) -> Result<()> {
+        // Update in-memory map so caller sees it immediately
+        self.templates
+            .insert(template.name.clone(), template.clone());
+
         if !self.templates_dir.exists() {
             fs::create_dir_all(&self.templates_dir)
                 .context("Failed to create templates directory")?;
