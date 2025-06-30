@@ -5,6 +5,7 @@ use crate::types::{
     ChatCompletion, ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
     StreamConfig, StreamResult, TokenUsage,
 };
+use crate::utils::sse::sse_lines;
 use futures::StreamExt;
 use std::collections::HashMap;
 
@@ -405,7 +406,7 @@ impl ChatCompletion for GoogleProvider {
 
         // Build the URL with API key for streaming endpoint
         let url = format!(
-            "{}/models/{}:streamGenerateContent?key={}",
+            "{}/models/{}:streamGenerateContent?alt=sse&key={}",
             self.config.base_url(),
             model,
             self.config.api_key()
@@ -425,6 +426,11 @@ impl ChatCompletion for GoogleProvider {
                 header_map.insert(name, val);
             }
         }
+
+        header_map.insert(
+            reqwest::header::ACCEPT,
+            reqwest::header::HeaderValue::from_static("text/event-stream"),
+        );
 
         let response_future = client
             .post(&url)
@@ -471,59 +477,35 @@ impl ChatCompletion for GoogleProvider {
                 }
             };
 
-            // Get the byte stream and parse newline-delimited JSON chunks
-            let mut byte_stream = response.bytes_stream();
-            let mut buffer = String::new();
+            // Google now returns Server-Sent Events (SSE) for streaming responses.
+            // Leverage the shared `sse_lines` util to properly parse the stream.
 
-            while let Some(chunk_result) = byte_stream.next().await {
-                match chunk_result {
-                    Ok(bytes) => {
-                        // Add new bytes to buffer
-                        match std::str::from_utf8(&bytes) {
-                            Ok(text) => {
-                                buffer.push_str(text);
+            let byte_stream = response.bytes_stream();
+            let mut sse_stream = sse_lines(byte_stream);
 
-                                // Process complete lines (Google uses newline-delimited JSON)
-                                while let Some(newline_pos) = buffer.find('\n') {
-                                    let line = buffer[..newline_pos].trim().to_string();
-                                    buffer.drain(..newline_pos + 1);
-
-                                    // Skip empty lines
-                                    if line.is_empty() {
-                                        continue;
-                                    }
-
-                                    // Parse the JSON chunk
-                                    match serde_json::from_str::<serde_json::Value>(&line) {
-                                        Ok(chunk) => {
-                                            // Extract content from candidates[0].content.parts[].text
-                                            if let Some(candidates) = chunk["candidates"].as_array() {
-                                                if let Some(first_candidate) = candidates.first() {
-                                                    if let Some(content) = first_candidate.get("content") {
-                                                        if let Some(parts) = content["parts"].as_array() {
-                                                            for part in parts {
-                                                                if let Some(text) = part["text"].as_str() {
-                                                                    yield Ok(ChatStreamEvent::Token(text.to_string()));
-                                                                }
-                                                            }
-                                                        }
+            while let Some(event_res) = sse_stream.next().await {
+                match event_res {
+                    Ok(line) => {
+                        // Each SSE `data:` line is a JSON object
+                        match serde_json::from_str::<serde_json::Value>(&line) {
+                            Ok(chunk) => {
+                                if let Some(candidates) = chunk["candidates"].as_array() {
+                                    if let Some(first_candidate) = candidates.first() {
+                                        if let Some(content) = first_candidate.get("content") {
+                                            if let Some(parts) = content["parts"].as_array() {
+                                                for part in parts {
+                                                    if let Some(text) = part["text"].as_str() {
+                                                        yield Ok(ChatStreamEvent::Token(text.to_string()));
                                                     }
                                                 }
                                             }
-                                        }
-                                        Err(e) => {
-                                            yield Err(LlmError::serialization(
-                                                format!("Failed to parse chunk JSON: {e}"),
-                                                Box::new(e),
-                                            ));
-                                            return;
                                         }
                                     }
                                 }
                             }
                             Err(e) => {
                                 yield Err(LlmError::serialization(
-                                    "Invalid UTF-8 in response stream",
+                                    format!("Failed to parse chunk JSON: {e}"),
                                     Box::new(e),
                                 ));
                                 return;
@@ -531,32 +513,9 @@ impl ChatCompletion for GoogleProvider {
                         }
                     }
                     Err(e) => {
-                        yield Err(LlmError::network(format!("Stream error: {e}")));
+                        // Propagate errors from SSE parser/network
+                        yield Err(e);
                         return;
-                    }
-                }
-            }
-
-            // Process any remaining content in buffer
-            if !buffer.trim().is_empty() {
-                match serde_json::from_str::<serde_json::Value>(buffer.trim()) {
-                    Ok(chunk) => {
-                        if let Some(candidates) = chunk["candidates"].as_array() {
-                            if let Some(first_candidate) = candidates.first() {
-                                if let Some(content) = first_candidate.get("content") {
-                                    if let Some(parts) = content["parts"].as_array() {
-                                        for part in parts {
-                                            if let Some(text) = part["text"].as_str() {
-                                                yield Ok(ChatStreamEvent::Token(text.to_string()));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(_) => {
-                        // Ignore parse errors for trailing content that might not be complete JSON
                     }
                 }
             }

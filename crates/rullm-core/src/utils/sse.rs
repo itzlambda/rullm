@@ -75,7 +75,9 @@ where
                     // Add new bytes to buffer
                     match std::str::from_utf8(&bytes) {
                         Ok(text) => {
-                            self.buffer.push_str(text);
+                            // Normalize CRLF to LF to handle Windows-style/HTTP CRLF delimiters
+                            let normalized = text.replace("\r\n", "\n");
+                            self.buffer.push_str(&normalized);
                             // Continue loop to try parsing again
                         }
                         Err(e) => {
