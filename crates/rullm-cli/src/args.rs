@@ -20,7 +20,7 @@ const CLI_EXAMPLES: &str = r#"EXAMPLES:
   rullm --no-streaming "Tell me a story"          # Disable streaming for buffered output
   rullm -m gpt4 "Code a web server"               # Stream tokens as they arrive (default)
   rullm -t code-review "Review this code"         # Use template for query
-  rullm -t greeting --param name=Alice "message" # Template with parameter override
+  rullm -t greeting "Hello"                     # Template with input parameter
   rullm chat                                      # Start interactive chat
   rullm chat -m gemini/gemini-pro                # Chat with specific model
   rullm chat --no-streaming -m claude            # Interactive chat without streaming"#;
@@ -134,10 +134,6 @@ pub struct Cli {
     /// Template to use for the query (only available for quick-query mode)
     #[arg(short, long)]
     pub template: Option<String>,
-
-    /// Set template parameters in format: --param key=value
-    #[arg(long, value_parser = parse_key_val)]
-    pub param: Vec<(String, String)>,
 
     /// Set options in format: --option key value (e.g., --option temperature 0.1 --option max_tokens 2096)
     #[arg(long, value_parser = parse_key_val, global = true)]

@@ -107,6 +107,16 @@ impl Template {
 
         placeholders
     }
+
+    /// Simplified rendering that only supports a single `{{input}}` placeholder.
+    /// This method constructs the minimal parameter map with the provided input
+    /// and delegates to `render`. All other placeholder parameters are no
+    /// longer supported.
+    pub fn render_input(&self, input: &str) -> Result<RenderedTemplate> {
+        let mut params = HashMap::new();
+        params.insert("input".to_string(), input.to_string());
+        self.render(&params)
+    }
 }
 
 /// A rendered template ready for use

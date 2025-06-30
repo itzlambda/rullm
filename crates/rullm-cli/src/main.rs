@@ -18,7 +18,6 @@ use clap::{CommandFactory, Parser};
 use cli_helpers::resolve_direct_query_model;
 use commands::Commands;
 use output::OutputLevel;
-use std::collections::HashMap;
 use templates::TemplateStore;
 
 #[tokio::main]
@@ -63,19 +62,14 @@ pub async fn run() -> Result<()> {
         }
     }
 
-    // Validate that template and param flags are only used for quick-query mode
-    if (cli.template.is_some() || !cli.param.is_empty()) && cli.command.is_some() {
+    // Validate that template flag is only used for quick-query mode
+    if cli.template.is_some() && cli.command.is_some() {
         use clap::error::ErrorKind;
 
         let mut cmd = Cli::command();
-        let flag = if cli.template.is_some() {
-            "'-t/--template'"
-        } else {
-            "'--param'"
-        };
         cmd.error(
             ErrorKind::UnknownArgument,
-            format!("unexpected argument {flag} found when using subcommands"),
+            "unexpected argument '-t/--template' found when using subcommands",
         )
         .exit();
     }
@@ -108,12 +102,8 @@ pub async fn run() -> Result<()> {
                         .get(template_name)
                         .ok_or_else(|| anyhow::anyhow!("Template '{}' not found", template_name))?;
 
-                    // Build parameters from --param flags and add the input
-                    let mut params: HashMap<String, String> = cli.param.iter().cloned().collect();
-                    params.insert("input".to_string(), query.clone());
-
-                    // Render the template
-                    let rendered = template.render(&params).map_err(|e| {
+                    // Render the template using the user input as the only parameter
+                    let rendered = template.render_input(query).map_err(|e| {
                         anyhow::anyhow!("Failed to render template '{}': {}", template_name, e)
                     })?;
 
