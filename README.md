@@ -15,7 +15,7 @@ rullm --model gpt4 "Explain quantum computing"
 rullm --model claude "Write a poem about the ocean"
 rullm --model gemini "What's the weather like?"
 
-# Use templates for structured queries
+# Use templates for structured queries ({{input}} placeholder is automatically filled)
 rullm -t code-review "Review this function"
 rullm -t greeting --param name=Alice "Welcome message"
 
@@ -59,14 +59,8 @@ Templates provide a way to create reusable prompt structures with placeholders f
 ### Template Usage
 
 ```bash
-# Use a template with the default parameters
+# Use a template ({{input}} is replaced by your query)
 rullm -t my-template "input text"
-
-# Override template parameters
-rullm -t code-review --param language=rust --param style=detailed "Review this code"
-
-# Multiple parameter overrides
-rullm -t greeting --param name=Alice --param time="morning" "Create a message"
 ```
 
 ### Template Format
@@ -86,10 +80,12 @@ style = "standard"
 
 ### Template Placeholders
 
-- `{{input}}` - Automatically filled with the user's query text
-- `{{custom}}` - Any custom placeholder defined in your template
-- Parameters can be overridden using `--param key=value`
-- Default values are used when no override is provided
+- `{{input}}` – Automatically filled with the user's query text.
+- Any additional placeholders **must** have a default value specified in the
+  `[defaults]` table of the template file, since the CLI no longer supports
+  runtime `--param` overrides.
+
+If a placeholder other than `input` lacks a default, rendering will fail.
 
 ### Built-in Model Aliases
 
