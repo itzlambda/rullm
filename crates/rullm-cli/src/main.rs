@@ -107,7 +107,8 @@ pub async fn run() -> Result<()> {
                         anyhow::anyhow!("Failed to render template '{}': {}", template_name, e)
                     })?;
 
-                    (rendered.system_prompt, rendered.user_prompt)
+                    let final_query = rendered.user_prompt.unwrap_or_else(|| query.clone());
+                    (rendered.system_prompt, final_query)
                 } else {
                     (None, query.clone())
                 };

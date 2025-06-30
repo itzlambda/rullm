@@ -78,8 +78,11 @@ impl TemplatesArgs {
                         output::note("System Prompt:", output_level);
                         output::note(sys, output_level);
                     }
-                    output::note("User Prompt:", output_level);
-                    output::note(&tpl.user_prompt, output_level);
+
+                    if let Some(user) = &tpl.user_prompt {
+                        output::note("User Prompt:", output_level);
+                        output::note(user, output_level);
+                    }
 
                     if !tpl.defaults.is_empty() {
                         output::note("\nDefaults:", output_level);

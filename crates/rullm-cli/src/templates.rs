@@ -13,8 +13,8 @@ pub struct Template {
     pub name: String,
     /// System prompt/message (optional)
     pub system_prompt: Option<String>,
-    /// User prompt template with {{placeholder}} syntax
-    pub user_prompt: String,
+    /// User prompt template with {{placeholder}} syntax (optional)
+    pub user_prompt: Option<String>,
     /// Default values for placeholders
     #[serde(default)]
     pub defaults: HashMap<String, String>,
@@ -23,11 +23,14 @@ pub struct Template {
 }
 
 impl Template {
+    /// Create a new template providing a user prompt.
+    /// If you need a template that only contains a system prompt, construct it manually
+    /// via `Template { .. }` or add a helper if needed.
     pub fn new(name: String, user_prompt: String) -> Self {
         Self {
             name,
             system_prompt: None,
-            user_prompt,
+            user_prompt: Some(user_prompt),
             defaults: HashMap::new(),
             description: None,
         }
@@ -36,12 +39,23 @@ impl Template {
     /// Render the template by replacing placeholders with provided values
     /// Returns an error if any required placeholders are missing
     pub fn render(&self, params: &HashMap<String, String>) -> Result<RenderedTemplate> {
+        // Ensure we have at least one prompt defined
+        if self.user_prompt.is_none() && self.system_prompt.is_none() {
+            return Err(anyhow::anyhow!(
+                "Template must have at least a user_prompt or system_prompt"
+            ));
+        }
+
         let mut rendered_user = self.user_prompt.clone();
         let mut rendered_system = self.system_prompt.clone();
         let mut missing_placeholders = Vec::new();
 
-        // Extract all placeholders from user prompt
-        let user_placeholders = extract_placeholders(&self.user_prompt);
+        // Extract placeholders from user prompt if it exists
+        let user_placeholders = if let Some(ref user) = self.user_prompt {
+            extract_placeholders(user)
+        } else {
+            Vec::new()
+        };
 
         // Extract placeholders from system prompt if it exists
         let system_placeholders = if let Some(ref system) = self.system_prompt {
@@ -67,7 +81,9 @@ impl Template {
             match value {
                 Some(val) => {
                     let pattern = format!("{{{{{placeholder}}}}}");
-                    rendered_user = rendered_user.replace(&pattern, val);
+                    if let Some(ref mut user) = rendered_user {
+                        *user = user.replace(&pattern, val);
+                    }
                     if let Some(ref mut system) = rendered_system {
                         *system = system.replace(&pattern, val);
                     }
@@ -94,7 +110,11 @@ impl Template {
     /// Get all placeholders required by this template
     #[allow(dead_code)]
     pub fn get_placeholders(&self) -> Vec<String> {
-        let mut placeholders = extract_placeholders(&self.user_prompt);
+        let mut placeholders = if let Some(ref user) = self.user_prompt {
+            extract_placeholders(user)
+        } else {
+            Vec::new()
+        };
 
         if let Some(ref system) = self.system_prompt {
             let system_placeholders = extract_placeholders(system);
@@ -123,7 +143,7 @@ impl Template {
 #[derive(Debug)]
 pub struct RenderedTemplate {
     pub system_prompt: Option<String>,
-    pub user_prompt: String,
+    pub user_prompt: Option<String>,
 }
 
 /// Store for managing templates
@@ -314,7 +334,7 @@ mod tests {
         let template = Template {
             name: "test".to_string(),
             system_prompt: Some("You are a {{role}}".to_string()),
-            user_prompt: "Hello {{name}}, the weather is {{weather}}".to_string(),
+            user_prompt: Some("Hello {{name}}, the weather is {{weather}}".to_string()),
             defaults: [("weather".to_string(), "sunny".to_string())].into(),
             description: None,
         };
@@ -328,7 +348,10 @@ mod tests {
             rendered.system_prompt,
             Some("You are a assistant".to_string())
         );
-        assert_eq!(rendered.user_prompt, "Hello Alice, the weather is sunny");
+        assert_eq!(
+            rendered.user_prompt,
+            Some("Hello Alice, the weather is sunny".to_string())
+        );
     }
 
     #[test]
@@ -336,7 +359,7 @@ mod tests {
         let template = Template {
             name: "test".to_string(),
             system_prompt: None,
-            user_prompt: "Hello {{name}}".to_string(),
+            user_prompt: Some("Hello {{name}}".to_string()),
             defaults: HashMap::new(),
             description: None,
         };
@@ -371,7 +394,7 @@ mod tests {
 
         let loaded = store.get("test").unwrap();
         assert_eq!(loaded.name, "test");
-        assert_eq!(loaded.user_prompt, "Hello {{name}}");
+        assert_eq!(loaded.user_prompt, Some("Hello {{name}}".to_string()));
     }
 
     #[test]
@@ -388,7 +411,10 @@ mod tests {
         params.insert("name".to_string(), "Alice".to_string());
 
         let rendered = template.render(&params).unwrap();
-        assert_eq!(rendered.user_prompt, "Hello Alice, how are you!");
+        assert_eq!(
+            rendered.user_prompt,
+            Some("Hello Alice, how are you!".to_string())
+        );
     }
 
     #[test]
@@ -406,7 +432,10 @@ mod tests {
         params.insert("greeting".to_string(), "welcome".to_string()); // Override default
 
         let rendered = template.render(&params).unwrap();
-        assert_eq!(rendered.user_prompt, "Hello Bob, welcome!");
+        assert_eq!(
+            rendered.user_prompt,
+            Some("Hello Bob, welcome!".to_string())
+        );
     }
 
     #[test]
@@ -414,7 +443,7 @@ mod tests {
         let template = Template {
             name: "assistant".to_string(),
             system_prompt: Some("You are a helpful {{role}} assistant. Be {{tone}}.".to_string()),
-            user_prompt: "Help me with {{task}}".to_string(),
+            user_prompt: Some("Help me with {{task}}".to_string()),
             defaults: [("tone".to_string(), "professional".to_string())].into(),
             description: Some("Assistant template".to_string()),
         };
@@ -428,7 +457,10 @@ mod tests {
             rendered.system_prompt,
             Some("You are a helpful coding assistant. Be professional.".to_string())
         );
-        assert_eq!(rendered.user_prompt, "Help me with debugging");
+        assert_eq!(
+            rendered.user_prompt,
+            Some("Help me with debugging".to_string())
+        );
     }
 
     #[test]
@@ -463,7 +495,7 @@ mod tests {
         let template = Template {
             name: "test".to_string(),
             system_prompt: Some("System: {{role}} with {{mood}}".to_string()),
-            user_prompt: "User: {{input}} for {{task}}".to_string(),
+            user_prompt: Some("User: {{input}} for {{task}}".to_string()),
             defaults: HashMap::new(),
             description: None,
         };
@@ -522,7 +554,7 @@ mod tests {
         let template = Template {
             name: "test".to_string(),
             system_prompt: Some("".to_string()),
-            user_prompt: "Hello {{name}}".to_string(),
+            user_prompt: Some("Hello {{name}}".to_string()),
             defaults: HashMap::new(),
             description: None,
         };
@@ -532,7 +564,7 @@ mod tests {
 
         let rendered = template.render(&params).unwrap();
         assert_eq!(rendered.system_prompt, Some("".to_string()));
-        assert_eq!(rendered.user_prompt, "Hello ");
+        assert_eq!(rendered.user_prompt, Some("Hello ".to_string()));
     }
 
     #[test]
@@ -540,7 +572,7 @@ mod tests {
         let template = Template {
             name: "test".to_string(),
             system_prompt: Some("System {{a}} {{b}}".to_string()),
-            user_prompt: "User {{c}} {{d}}".to_string(),
+            user_prompt: Some("User {{c}} {{d}}".to_string()),
             defaults: HashMap::new(),
             description: None,
         };
