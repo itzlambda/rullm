@@ -1,5 +1,5 @@
 use rullm_core::config::ConfigBuilder;
-use rullm_core::{AnthropicProvider, ChatProvider, ChatRequestBuilder, LlmProvider};
+use rullm_core::{AnthropicProvider, ChatCompletion, ChatRequestBuilder, LlmProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -1,6 +1,6 @@
 use futures::StreamExt;
 use rullm_core::config::ConfigBuilder;
-use rullm_core::{AnthropicProvider, ChatProvider, ChatRequestBuilder, ChatStreamEvent};
+use rullm_core::{AnthropicProvider, ChatCompletion, ChatRequestBuilder, ChatStreamEvent};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

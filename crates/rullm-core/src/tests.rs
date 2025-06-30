@@ -2,7 +2,7 @@ use crate::config::*;
 use crate::error::LlmError;
 use crate::middleware::{LlmServiceBuilder, MiddlewareConfig, RateLimit};
 use crate::types::{
-    ChatMessage, ChatProvider, ChatRequest, ChatRequestBuilder, ChatResponse, ChatRole,
+    ChatCompletion, ChatMessage, ChatRequest, ChatRequestBuilder, ChatResponse, ChatRole,
     LlmProvider, StreamConfig, TokenUsage,
 };
 use std::time::Duration;
@@ -62,7 +62,7 @@ impl LlmProvider for MockProvider {
 }
 
 #[async_trait::async_trait]
-impl ChatProvider for MockProvider {
+impl ChatCompletion for MockProvider {
     async fn chat_completion(
         &self,
         _request: ChatRequest,
@@ -1002,7 +1002,7 @@ impl LlmProvider for MockFailingProvider {
 }
 
 #[async_trait::async_trait]
-impl ChatProvider for MockFailingProvider {
+impl ChatCompletion for MockFailingProvider {
     async fn chat_completion(
         &self,
         _request: ChatRequest,

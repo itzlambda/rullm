@@ -106,7 +106,7 @@ pub trait LlmProvider: Send + Sync {
 
 /// Trait for chat-based interactions
 #[async_trait::async_trait]
-pub trait ChatProvider: LlmProvider {
+pub trait ChatCompletion: LlmProvider {
     /// Send a chat completion request
     async fn chat_completion(
         &self,

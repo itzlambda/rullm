@@ -1,7 +1,7 @@
 use crate::config::{ProviderConfig, RetryPolicy};
 use crate::error::LlmError;
 use crate::types::{
-    ChatProvider, ChatRequest, ChatResponse, ChatStreamEvent, StreamConfig, StreamResult,
+    ChatCompletion, ChatRequest, ChatResponse, ChatStreamEvent, StreamConfig, StreamResult,
 };
 use futures::Stream;
 use metrics::{counter, histogram};
@@ -637,7 +637,7 @@ impl LlmServiceBuilder {
 
     pub fn build<P>(self, provider: P, model: String) -> MiddlewareStack<P>
     where
-        P: ChatProvider + Clone + Send + Sync + 'static,
+        P: ChatCompletion + Clone + Send + Sync + 'static,
     {
         MiddlewareStack {
             provider,
@@ -656,7 +656,7 @@ pub struct MiddlewareStack<P> {
 
 impl<P> MiddlewareStack<P>
 where
-    P: ChatProvider + Clone,
+    P: ChatCompletion + Clone,
 {
     pub async fn call(&mut self, request: ChatRequest) -> Result<ChatResponse, LlmError> {
         let start = std::time::Instant::now();

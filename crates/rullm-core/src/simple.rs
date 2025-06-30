@@ -7,7 +7,7 @@ use crate::config::{AnthropicConfig, GoogleAiConfig, OpenAIConfig};
 use crate::error::LlmError;
 use crate::providers::{AnthropicProvider, GoogleProvider, OpenAIProvider};
 use crate::types::{
-    ChatMessage, ChatProvider, ChatRequest, ChatRole, ChatStreamEvent, LlmProvider,
+    ChatCompletion, ChatMessage, ChatRequest, ChatRole, ChatStreamEvent, LlmProvider,
 };
 use async_trait::async_trait;
 use futures::StreamExt;

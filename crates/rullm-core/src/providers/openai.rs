@@ -2,7 +2,7 @@ use crate::config::ProviderConfig;
 use crate::error::LlmError;
 use crate::middleware::EnhancedHttpClient;
 use crate::types::{
-    ChatMessage, ChatProvider, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
+    ChatCompletion, ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
     StreamConfig, StreamResult, TokenUsage,
 };
 use crate::utils::sse::sse_lines;
@@ -254,7 +254,7 @@ impl LlmProvider for OpenAIProvider {
 }
 
 #[async_trait::async_trait]
-impl ChatProvider for OpenAIProvider {
+impl ChatCompletion for OpenAIProvider {
     async fn chat_completion(
         &self,
         request: ChatRequest,

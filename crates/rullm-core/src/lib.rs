@@ -159,7 +159,7 @@ pub use middleware::{LlmServiceBuilder, MiddlewareConfig, MiddlewareStack, RateL
 pub use providers::{AnthropicProvider, GoogleProvider, OpenAIProvider};
 pub use simple::{DefaultModels, SimpleLlm, SimpleLlmBuilder, SimpleLlmClient, SimpleLlmConfig};
 pub use types::{
-    ChatMessage, ChatProvider, ChatRequest, ChatRequestBuilder, ChatResponse, ChatRole,
+    ChatCompletion, ChatMessage, ChatRequest, ChatRequestBuilder, ChatResponse, ChatRole,
     ChatStreamEvent, LlmProvider, StreamConfig, StreamResult, TokenUsage,
 };
 pub use utils::sse::sse_lines;

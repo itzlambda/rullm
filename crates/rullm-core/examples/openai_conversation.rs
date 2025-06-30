@@ -1,5 +1,5 @@
 use rullm_core::config::ConfigBuilder;
-use rullm_core::{ChatProvider, ChatRequestBuilder, LlmProvider, OpenAIProvider};
+use rullm_core::{ChatCompletion, ChatRequestBuilder, LlmProvider, OpenAIProvider};
 use std::io::{self, Write};
 
 #[tokio::main]

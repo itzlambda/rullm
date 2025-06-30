@@ -2,7 +2,7 @@ use crate::config::ProviderConfig;
 use crate::error::LlmError;
 use crate::middleware::EnhancedHttpClient;
 use crate::types::{
-    ChatMessage, ChatProvider, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
+    ChatCompletion, ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
     StreamConfig, StreamResult, TokenUsage,
 };
 use futures::StreamExt;
@@ -320,7 +320,7 @@ impl LlmProvider for GoogleProvider {
 }
 
 #[async_trait::async_trait]
-impl ChatProvider for GoogleProvider {
+impl ChatCompletion for GoogleProvider {
     async fn chat_completion(
         &self,
         request: ChatRequest,
