@@ -53,8 +53,6 @@ rullm keys list
 
 ## 📝 Templates
 
-Templates provide a way to create reusable prompt structures with placeholders for dynamic content. They're stored as TOML files in your system's configuration directory.
-
 ### Template Usage
 
 ```bash
@@ -69,22 +67,22 @@ Templates are stored as TOML files in `~/.config/rullm/templates/` (or your syst
 ```toml
 name = "code-review"
 description = "Template for code review requests"
-system_prompt = "You are an expert {{language}} developer. Review the code with {{style}} analysis."
-user_prompt = "Please review this {{language}} code: {{input}}"
+# You can include multi-line prompts using TOML triple-quoted strings:
+system_prompt = """
+You are a senior Rust engineer.
 
-[defaults]
-language = "generic"
-style = "standard"
+Provide a thorough review with the following structure:
+1. Summary
+2. Strengths
+3. Weaknesses
+4. Suggestions
+"""
+user_prompt = "Please review this code: {{input}}"
 ```
 
 ### Template Placeholders
 
 - `{{input}}` – Automatically filled with the user's query text.
-- Any additional placeholders **must** have a default value specified in the
-  `[defaults]` table of the template file, since the CLI no longer supports
-  runtime `--param` overrides.
-
-If a placeholder other than `input` lacks a default, rendering will fail.
 
 ### Built-in Model Aliases
 
