@@ -1,8 +1,10 @@
+use crate::args::template_completer;
 use crate::args::{Cli, CliConfig};
 use crate::output::{self, OutputLevel};
 use crate::templates::TemplateStore;
 use anyhow::Result;
 use clap::{Args, Subcommand};
+use clap_complete::engine::ArgValueCompleter;
 
 #[derive(Args)]
 pub struct TemplatesArgs {
@@ -17,11 +19,19 @@ pub enum TemplateAction {
     /// Show a specific template's details
     Show {
         /// Template name
+        #[arg(value_name = "NAME", add = ArgValueCompleter::new(template_completer))]
         name: String,
     },
     /// Remove a template file
     Remove {
         /// Template name to delete
+        #[arg(value_name = "NAME", add = ArgValueCompleter::new(template_completer))]
+        name: String,
+    },
+    /// Edit a template file in $EDITOR
+    Edit {
+        /// Template name to edit
+        #[arg(value_name = "NAME", add = ArgValueCompleter::new(template_completer))]
         name: String,
     },
     /// Create a new template
@@ -104,6 +114,46 @@ impl TemplatesArgs {
                     output_level,
                 ),
             },
+            TemplateAction::Edit { name } => {
+                use std::env;
+                use std::process::Command;
+                use std::process::Stdio;
+
+                if !store.contains(name) {
+                    output::error(&format!("Template '{name}' not found."), output_level);
+                    return Ok(());
+                }
+
+                let file_path = store.templates_dir().join(format!("{name}.toml"));
+                let editor = env::var("EDITOR").unwrap_or_else(|_| "nvim".to_string());
+
+                let status = Command::new(&editor)
+                    .arg(&file_path)
+                    .stdin(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit())
+                    .status();
+
+                match status {
+                    Ok(s) if s.success() => {
+                        // Reload the store to refresh in-memory state
+                        if let Err(e) = store.load() {
+                            output::warning(
+                                &format!("Edited, but failed to reload templates: {e}"),
+                                output_level,
+                            );
+                        } else {
+                            output::success(&format!("Edited template '{name}'."), output_level);
+                        }
+                    }
+                    Ok(s) => {
+                        output::error(&format!("Editor exited with status: {s}"), output_level);
+                    }
+                    Err(e) => {
+                        output::error(&format!("Failed to launch editor: {e}"), output_level);
+                    }
+                }
+            }
             TemplateAction::Create {
                 name,
                 user_prompt,
