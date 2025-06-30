@@ -91,24 +91,41 @@ pub async fn run() -> Result<()> {
 
                 // Handle template if provided
                 let (system_prompt, final_query) = if let Some(template_name) = &cli.template {
-                    // Load template store
-                    let mut template_store = TemplateStore::new(&cli_config.config_base_path);
-                    template_store
-                        .load()
-                        .map_err(|e| anyhow::anyhow!("Failed to load templates: {}", e))?;
+                    if template_name.starts_with('@') {
+                        // Ad-hoc template from file
+                        let path = template_name.trim_start_matches('@');
+                        let content = std::fs::read_to_string(path).map_err(|e| {
+                            anyhow::anyhow!("Failed to read template file '{}': {}", path, e)
+                        })?;
+                        let template: templates::Template =
+                            toml::from_str(&content).map_err(|e| {
+                                anyhow::anyhow!("Failed to parse template file '{}': {}", path, e)
+                            })?;
+                        let rendered = template.render_input(query).map_err(|e| {
+                            anyhow::anyhow!("Failed to render template from '{}': {}", path, e)
+                        })?;
+                        let final_query = rendered.user_prompt.unwrap_or_else(|| query.clone());
+                        (rendered.system_prompt, final_query)
+                    } else {
+                        // Load template store
+                        let mut template_store = TemplateStore::new(&cli_config.config_base_path);
+                        template_store
+                            .load()
+                            .map_err(|e| anyhow::anyhow!("Failed to load templates: {}", e))?;
 
-                    // Get the template
-                    let template = template_store
-                        .get(template_name)
-                        .ok_or_else(|| anyhow::anyhow!("Template '{}' not found", template_name))?;
+                        // Get the template
+                        let template = template_store.get(template_name).ok_or_else(|| {
+                            anyhow::anyhow!("Template '{}' not found", template_name)
+                        })?;
 
-                    // Render the template using the user input as the only parameter
-                    let rendered = template.render_input(query).map_err(|e| {
-                        anyhow::anyhow!("Failed to render template '{}': {}", template_name, e)
-                    })?;
+                        // Render the template using the user input as the only parameter
+                        let rendered = template.render_input(query).map_err(|e| {
+                            anyhow::anyhow!("Failed to render template '{}': {}", template_name, e)
+                        })?;
 
-                    let final_query = rendered.user_prompt.unwrap_or_else(|| query.clone());
-                    (rendered.system_prompt, final_query)
+                        let final_query = rendered.user_prompt.unwrap_or_else(|| query.clone());
+                        (rendered.system_prompt, final_query)
+                    }
                 } else {
                     (None, query.clone())
                 };

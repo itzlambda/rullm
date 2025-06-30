@@ -11,6 +11,7 @@ use crate::commands::models::load_cached_models;
 use crate::commands::{Commands, ModelsCache};
 use crate::config::{self, Config};
 use crate::constants::{BINARY_NAME, KEYS_CONFIG_FILE};
+use crate::templates::TemplateStore;
 
 // Example strings for after_long_help
 const CLI_EXAMPLES: &str = r#"EXAMPLES:
@@ -132,7 +133,7 @@ pub struct Cli {
     pub model: Option<String>,
 
     /// Template to use for the query (only available for quick-query mode)
-    #[arg(short, long)]
+    #[arg(short, long, add = ArgValueCompleter::new(template_completer))]
     pub template: Option<String>,
 
     /// Set options in format: --option key value (e.g., --option temperature 0.1 --option max_tokens 2096)
@@ -218,6 +219,45 @@ pub fn model_completer(current: &OsStr) -> Vec<CompletionCandidate> {
         .filter(|p| p.starts_with(cur_str.as_ref()))
         .map(|m| (*m).into())
         .collect()
+}
+
+pub fn template_completer(current: &std::ffi::OsStr) -> Vec<clap_complete::CompletionCandidate> {
+    let cur_str = current.to_string_lossy();
+    let mut candidates = Vec::new();
+
+    // Only suggest .toml files in CWD as @filename.toml if user input starts with '@'
+    if let Some(prefix) = cur_str.strip_prefix('@') {
+        if let Ok(entries) = std::fs::read_dir(".") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "toml" {
+                        if let Some(fname) = path.file_name().and_then(|f| f.to_str()) {
+                            if fname.starts_with(prefix) {
+                                candidates.push(format!("@{fname}").into());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Otherwise, suggest installed template names
+        let strategy = match etcetera::choose_base_strategy() {
+            Ok(s) => s,
+            Err(_) => return candidates,
+        };
+        let config_base_path = strategy.config_dir().join(BINARY_NAME);
+        let mut store = TemplateStore::new(&config_base_path);
+        if store.load().is_ok() {
+            for name in store.list() {
+                if name.starts_with(cur_str.as_ref()) {
+                    candidates.push(name.into());
+                }
+            }
+        }
+    }
+    candidates
 }
 
 #[cfg(test)]
