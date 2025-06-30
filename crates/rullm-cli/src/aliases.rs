@@ -367,7 +367,7 @@ fn default_aliases() -> &'static HashMap<String, String> {
         aliases.insert("gemini".to_string(), "google/gemini-1.5-pro".to_string());
         aliases.insert(
             "gemini-pro".to_string(),
-            "google/gemini-1.5-pro".to_string(),
+            "google/gemini-2.5-pro".to_string(),
         );
         aliases.insert(
             "gemini-flash".to_string(),
