@@ -7,7 +7,7 @@ use clap_complete::engine::ArgValueCompleter;
 use std::ffi::OsStr;
 
 use crate::api_keys::ApiKeys;
-use crate::commands::models::load_cached_models;
+use crate::commands::models::load_models_cache;
 use crate::commands::{Commands, ModelsCache};
 use crate::config::{self, Config};
 use crate::constants::{BINARY_NAME, KEYS_CONFIG_FILE};
@@ -185,14 +185,16 @@ pub fn model_completer(current: &OsStr) -> Vec<CompletionCandidate> {
     // Predefined providers or aliases
     const PROVIDED: &[&str] = &["openai/", "anthropic/", "google/"];
 
+    let cli_config = CliConfig::load();
     let cur_str = current.to_string_lossy();
 
     // If there is a slash already, offer all cached models that start with input
     if cur_str.contains('/') {
         if let Some((provider, _)) = cur_str.split_once('/') {
             // Load cached models
-            if let Ok(entries) = load_cached_models() {
+            if let Ok(Some(entries)) = load_models_cache(&cli_config) {
                 let mut v: Vec<CompletionCandidate> = entries
+                    .models
                     .into_iter()
                     .filter(|m| m.starts_with(cur_str.as_ref()))
                     .map(|m| m.into())

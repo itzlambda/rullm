@@ -1,10 +1,7 @@
-use std::path::PathBuf;
-
 use anyhow::Result;
 use chrono::Utc;
 use clap::{Args, Subcommand};
 use clap_complete::engine::ArgValueCompleter;
-use etcetera::BaseStrategy;
 use rullm_core::{LlmError, SimpleLlm, SimpleLlmClient};
 
 use crate::{
@@ -74,12 +71,12 @@ impl ModelsArgs {
             ModelsAction::Update { model } => {
                 let model_str = resolve_model(&cli.model, model, &cli_config.config.default_model)?;
                 let client = client::from_model(&model_str, cli, cli_config)?;
-                update_models(&client, output_level)
+                update_models(cli_config, &client, output_level)
                     .await
                     .map_err(anyhow::Error::from)?;
             }
             ModelsAction::Clear => {
-                clear_models_cache(output_level)?;
+                clear_models_cache(cli_config, output_level)?;
             }
         }
 
@@ -106,7 +103,7 @@ pub fn show_cached_models(cli_config: &CliConfig, output_level: OutputLevel) -> 
     }
 
     // Check if cache is stale (older than 24 hours)
-    if let Ok(Some(cache)) = load_models_cache() {
+    if let Ok(Some(cache)) = load_models_cache(cli_config) {
         let now = Utc::now();
         let cache_age = now.signed_duration_since(cache.last_updated);
 
@@ -150,10 +147,10 @@ pub async fn set_default_model(
     Ok(())
 }
 
-pub fn clear_models_cache(output_level: OutputLevel) -> Result<()> {
+pub fn clear_models_cache(cli_config: &CliConfig, output_level: OutputLevel) -> Result<()> {
     use std::fs;
 
-    let path = get_models_cache_path()?;
+    let path = cli_config.data_base_path.join(MODEL_FILE_NAME);
 
     if path.exists() {
         fs::remove_file(&path)?;
@@ -166,6 +163,7 @@ pub fn clear_models_cache(output_level: OutputLevel) -> Result<()> {
 }
 
 pub async fn update_models(
+    cli_config: &mut CliConfig,
     client: &SimpleLlmClient,
     output_level: OutputLevel,
 ) -> Result<(), LlmError> {
@@ -183,7 +181,7 @@ pub async fn update_models(
                 &format!("Fetched {} models. Caching", models.len()),
                 output_level,
             );
-            if let Err(e) = cache_models(client.provider_name(), &models) {
+            if let Err(e) = cache_models(cli_config, client.provider_name(), &models) {
                 crate::output::error(&format!("Failed to cache: {e}"), output_level);
             }
         }
@@ -196,10 +194,12 @@ pub async fn update_models(
     Ok(())
 }
 
-fn cache_models(provider_name: &str, models: &[String]) -> Result<()> {
+fn cache_models(cli_config: &CliConfig, provider_name: &str, models: &[String]) -> Result<()> {
     use std::fs;
 
-    let path = get_models_cache_path()?;
+    let path = cli_config.data_base_path.join(MODEL_FILE_NAME);
+    // TODO: we shouldn't need to do this here, this should be done while cli_config is created
+    // TODO: Remove if we already do this.
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -216,19 +216,10 @@ fn cache_models(provider_name: &str, models: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Helper function to get models cache path, eliminating duplication
-fn get_models_cache_path() -> Result<PathBuf> {
-    use crate::constants::BINARY_NAME;
-    use etcetera::choose_base_strategy;
-
-    let strategy = choose_base_strategy()?;
-    Ok(strategy.data_dir().join(BINARY_NAME).join(MODEL_FILE_NAME))
-}
-
-pub(crate) fn load_models_cache() -> Result<Option<ModelsCache>> {
+pub(crate) fn load_models_cache(cli_config: &CliConfig) -> Result<Option<ModelsCache>> {
     use std::fs;
 
-    let path = get_models_cache_path()?;
+    let path = cli_config.data_base_path.join(MODEL_FILE_NAME);
 
     if !path.exists() {
         return Ok(None);
@@ -243,25 +234,4 @@ pub(crate) fn load_models_cache() -> Result<Option<ModelsCache>> {
 
     // Old format doesn't have timestamp info
     Ok(None)
-}
-
-pub fn load_cached_models() -> Result<Vec<String>> {
-    use std::fs;
-
-    let path = get_models_cache_path()?;
-
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let content = fs::read_to_string(path)?;
-
-    // Try to parse as new format first
-    if let Ok(cache) = serde_json::from_str::<ModelsCache>(&content) {
-        return Ok(cache.models);
-    }
-
-    // Fallback to old format (simple array)
-    let entries: Vec<String> = serde_json::from_str(&content)?;
-    Ok(entries)
 }
