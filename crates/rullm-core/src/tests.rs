@@ -31,7 +31,7 @@ impl MockProvider {
 #[async_trait::async_trait]
 impl LlmProvider for MockProvider {
     fn name(&self) -> &'static str {
-        ""
+        self.name
     }
 
     fn aliases(&self) -> &'static [&'static str] {

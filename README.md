@@ -15,6 +15,9 @@ rullm --model gpt4 "Explain quantum computing"
 rullm --model claude "Write a poem about the ocean"
 rullm --model gemini "What's the weather like?"
 
+# Use templates for structured queries ({{input}} placeholder is automatically filled)
+rullm -t code-review "Review this function"
+
 # Interactive chat
 rullm chat --model claude
 
@@ -47,6 +50,39 @@ rullm alias show claude
 rullm keys set openai
 rullm keys list
 ```
+
+## 📝 Templates
+
+### Template Usage
+
+```bash
+# Use a template ({{input}} is replaced by your query)
+rullm -t my-template "input text"
+```
+
+### Template Format
+
+Templates are stored as TOML files in `~/.config/rullm/templates/` (or your system's config directory):
+
+```toml
+name = "code-review"
+description = "Template for code review requests"
+# You can include multi-line prompts using TOML triple-quoted strings:
+system_prompt = """
+You are a senior Rust engineer.
+
+Provide a thorough review with the following structure:
+1. Summary
+2. Strengths
+3. Weaknesses
+4. Suggestions
+"""
+user_prompt = "Please review this code: {{input}}"
+```
+
+### Template Placeholders
+
+- `{{input}}` – Automatically filled with the user's query text.
 
 ### Built-in Model Aliases
 

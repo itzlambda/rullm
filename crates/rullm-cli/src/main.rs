@@ -10,6 +10,7 @@ mod config;
 mod constants;
 mod output;
 mod provider;
+mod templates;
 
 use anyhow::Result;
 use args::{Cli, CliConfig};
@@ -17,6 +18,7 @@ use clap::{CommandFactory, Parser};
 use cli_helpers::resolve_direct_query_model;
 use commands::Commands;
 use output::OutputLevel;
+use templates::resolve_template_prompts;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -60,6 +62,18 @@ pub async fn run() -> Result<()> {
         }
     }
 
+    // Validate that template flag is only used for quick-query mode
+    if cli.template.is_some() && cli.command.is_some() {
+        use clap::error::ErrorKind;
+
+        let mut cmd = Cli::command();
+        cmd.error(
+            ErrorKind::UnknownArgument,
+            "unexpected argument '-t/--template' found when using subcommands",
+        )
+        .exit();
+    }
+
     // Handle commands
     match &cli.command {
         Some(Commands::Chat(args)) => args.run(output_level, &cli_config, &cli).await?,
@@ -68,14 +82,28 @@ pub async fn run() -> Result<()> {
         Some(Commands::Keys(args)) => args.run(output_level, &mut cli_config, &cli).await?,
         Some(Commands::Alias(args)) => args.run(output_level, &cli_config, &cli).await?,
         Some(Commands::Completions(args)) => args.run(output_level, &cli_config, &cli).await?,
+        Some(Commands::Templates(args)) => args.run(output_level, &cli_config, &cli).await?,
         None => {
             if let Some(query) = &cli.query {
                 let model_str =
                     resolve_direct_query_model(&cli.model, &cli_config.config.default_model)?;
                 let client = client::from_model(&model_str, &cli, &cli_config)?;
-                commands::run_single_query(&client, query, None, !cli.no_streaming)
-                    .await
-                    .map_err(anyhow::Error::from)?;
+
+                // Handle template if provided
+                let (system_prompt, final_query) = if let Some(template_name) = &cli.template {
+                    resolve_template_prompts(template_name, query, &cli_config.config_base_path)?
+                } else {
+                    (None, query.clone())
+                };
+
+                commands::run_single_query(
+                    &client,
+                    &final_query,
+                    system_prompt.as_deref(),
+                    !cli.no_streaming,
+                )
+                .await
+                .map_err(anyhow::Error::from)?;
             } else {
                 eprintln!("Error: No query provided. Use --help for usage information.");
                 std::process::exit(1);
