@@ -183,7 +183,7 @@ impl Models {
 
 pub fn model_completer(current: &OsStr) -> Vec<CompletionCandidate> {
     // Predefined providers or aliases
-    const PROVIDED: &[&str] = &["openai/", "anthropic/", "gemini/"];
+    const PROVIDED: &[&str] = &["openai/", "anthropic/", "google/"];
 
     let cur_str = current.to_string_lossy();
 
