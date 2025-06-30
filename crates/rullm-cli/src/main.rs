@@ -64,22 +64,21 @@ pub async fn run() -> Result<()> {
     }
 
     // Validate that template and param flags are only used for quick-query mode
-    if (cli.template.is_some() || !cli.param.is_empty())
-        && cli.command.is_some() {
-            use clap::error::ErrorKind;
+    if (cli.template.is_some() || !cli.param.is_empty()) && cli.command.is_some() {
+        use clap::error::ErrorKind;
 
-            let mut cmd = Cli::command();
-            let flag = if cli.template.is_some() {
-                "'-t/--template'"
-            } else {
-                "'--param'"
-            };
-            cmd.error(
-                ErrorKind::UnknownArgument,
-                format!("unexpected argument {flag} found when using subcommands"),
-            )
-            .exit();
-        }
+        let mut cmd = Cli::command();
+        let flag = if cli.template.is_some() {
+            "'-t/--template'"
+        } else {
+            "'--param'"
+        };
+        cmd.error(
+            ErrorKind::UnknownArgument,
+            format!("unexpected argument {flag} found when using subcommands"),
+        )
+        .exit();
+    }
 
     // Handle commands
     match &cli.command {
@@ -89,6 +88,7 @@ pub async fn run() -> Result<()> {
         Some(Commands::Keys(args)) => args.run(output_level, &mut cli_config, &cli).await?,
         Some(Commands::Alias(args)) => args.run(output_level, &cli_config, &cli).await?,
         Some(Commands::Completions(args)) => args.run(output_level, &cli_config, &cli).await?,
+        Some(Commands::Templates(args)) => args.run(output_level, &cli_config, &cli).await?,
         None => {
             if let Some(query) = &cli.query {
                 let model_str =

@@ -14,6 +14,7 @@ pub mod alias;
 pub mod chat;
 pub mod completions;
 pub mod info;
+pub mod templates;
 
 pub mod keys;
 pub mod models;
@@ -79,6 +80,11 @@ pub enum Commands {
     /// Generate shell completions
     #[command(after_long_help = COMPLETIONS_EXAMPLES)]
     Completions(CompletionsArgs),
+    /// Manage templates
+    #[command(
+        after_long_help = "EXAMPLES:\n  rullm templates list\n  rullm templates show code-review\n  rullm templates remove old-template"
+    )]
+    Templates(templates::TemplatesArgs),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

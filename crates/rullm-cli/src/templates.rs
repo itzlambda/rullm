@@ -200,6 +200,24 @@ impl TemplateStore {
         Ok(())
     }
 
+    /// Delete a template file from disk. Returns true if deleted.
+    pub fn delete(&mut self, name: &str) -> Result<bool> {
+        let file_path = self.templates_dir.join(format!("{}.toml", name));
+
+        if !file_path.exists() {
+            // Nothing to delete
+            return Ok(false);
+        }
+
+        std::fs::remove_file(&file_path)
+            .with_context(|| format!("Failed to delete template file: {file_path:?}"))?;
+
+        // Also remove from in-memory cache if present
+        self.templates.remove(name);
+
+        Ok(true)
+    }
+
     /// Get a template by name
     pub fn get(&self, name: &str) -> Option<&Template> {
         self.templates.get(name)
