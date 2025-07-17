@@ -10,6 +10,7 @@ mod config;
 mod constants;
 mod output;
 mod provider;
+mod spinner;
 mod templates;
 
 use anyhow::Result;

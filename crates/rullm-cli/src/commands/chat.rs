@@ -21,6 +21,7 @@ use crate::{
     client,
     config::Config,
     output::OutputLevel,
+    spinner::Spinner,
 };
 
 #[derive(Args)]
@@ -391,11 +392,13 @@ pub async fn run_interactive_chat(
                 // Regular chat message
                 conversation.push((ChatRole::User, input.to_string()));
 
-                // Show loading indicator
-                print!("{} ", "Assistant:".blue().bold());
-
                 if streaming {
-                    io::stdout().flush()?;
+                    // Show spinner while waiting for first token
+                    let spinner = Spinner::new("Assistant:");
+                    spinner.start().await;
+
+                    // Small delay to ensure spinner starts
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
                     // Build ChatRequest with full conversation + current user message
                     let mut builder = ChatRequestBuilder::new().stream(true);
@@ -408,9 +411,19 @@ pub async fn run_interactive_chat(
                     match client.stream_chat_raw(request).await {
                         Ok(mut stream) => {
                             let mut full_response = String::new();
+                            let mut first_token = true;
+
                             while let Some(evt) = stream.next().await {
                                 match evt {
                                     Ok(ChatStreamEvent::Token(tok)) => {
+                                        if first_token {
+                                            // Stop spinner and show Assistant label on first token
+                                            spinner.stop_and_replace(&format!(
+                                                "{} ",
+                                                "Assistant:".blue().bold()
+                                            ));
+                                            first_token = false;
+                                        }
                                         full_response.push_str(&tok);
                                         print!("{tok}");
                                         io::stdout().flush()?;
@@ -421,36 +434,56 @@ pub async fn run_interactive_chat(
                                         break;
                                     }
                                     Ok(ChatStreamEvent::Error(msg)) => {
-                                        eprintln!("\n{} {}", "Error:".red().bold(), msg);
+                                        spinner.stop_and_replace(&format!(
+                                            "{} {}\n",
+                                            "Error:".red().bold(),
+                                            msg
+                                        ));
                                         break;
                                     }
                                     Err(err) => {
-                                        eprintln!("\n{} {}", "Error:".red().bold(), err);
+                                        spinner.stop_and_replace(&format!(
+                                            "{} {}\n",
+                                            "Error:".red().bold(),
+                                            err
+                                        ));
                                         break;
                                     }
                                 }
                             }
+
+                            // Ensure spinner is stopped if no tokens were received
+                            if first_token {
+                                spinner.stop_and_replace(&format!(
+                                    "{} {}\n",
+                                    "Assistant:".blue().bold(),
+                                    "(No response received)".dimmed()
+                                ));
+                            }
                         }
                         Err(e) => {
-                            eprintln!("{} {}", "Error:".red().bold(), e);
+                            spinner.stop_and_replace(&format!("{} {}\n", "Error:".red().bold(), e));
                         }
                     }
                 } else {
-                    // Non-streaming fallback
-                    print!("{}", "Generating...".dimmed());
-                    io::stdout().flush()?;
+                    // Non-streaming with spinner
+                    let spinner = Spinner::new("Assistant:");
+                    spinner.start().await;
+
+                    // Small delay to ensure spinner starts
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 
                     match client.conversation(conversation.clone()).await {
                         Ok(response) => {
-                            // Clear the "Generating..." text and show response
-                            print!("\r{} {}\n", "Assistant:".blue().bold(), response);
-                            io::stdout().flush()?;
+                            spinner.stop_and_replace(&format!(
+                                "{} {}\n",
+                                "Assistant:".blue().bold(),
+                                response
+                            ));
                             conversation.push((ChatRole::Assistant, response));
                         }
                         Err(e) => {
-                            // Clear the "Generating..." text and show error
-                            print!("\r{} {}\n", "Error:".red().bold(), e);
-                            io::stdout().flush()?;
+                            spinner.stop_and_replace(&format!("{} {}\n", "Error:".red().bold(), e));
                         }
                     }
                 }

@@ -7,6 +7,8 @@ use rullm_core::simple::{SimpleLlm, SimpleLlmClient};
 use rullm_core::types::{ChatRequestBuilder, ChatRole, ChatStreamEvent};
 use std::io::{self, Write};
 
+use crate::spinner::Spinner;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -120,6 +122,13 @@ pub async fn run_single_query(
     if streaming {
         // Use token-by-token streaming for real-time output
         if system_prompt.is_none() {
+            // Show spinner while waiting for first token
+            let spinner = Spinner::new("Generating response");
+            spinner.start().await;
+
+            // Small delay to ensure spinner starts
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
             // Simple query streaming - use raw streaming API for real-time output
             let mut builder = ChatRequestBuilder::new().stream(true);
             builder = builder.add_message(ChatRole::User, query);
@@ -127,9 +136,14 @@ pub async fn run_single_query(
 
             match client.stream_chat_raw(request).await {
                 Ok(mut stream) => {
+                    let mut first_token = true;
                     while let Some(evt) = stream.next().await {
                         match evt {
                             Ok(ChatStreamEvent::Token(tok)) => {
+                                if first_token {
+                                    spinner.stop();
+                                    first_token = false;
+                                }
                                 print!("{tok}");
                                 io::stdout()
                                     .flush()
@@ -140,37 +154,68 @@ pub async fn run_single_query(
                                 break;
                             }
                             Ok(ChatStreamEvent::Error(msg)) => {
-                                eprintln!("\nError: {msg}");
+                                spinner.stop_and_replace(&format!("Error: {msg}\n"));
                                 return Err(LlmError::unknown(msg));
                             }
                             Err(err) => {
-                                eprintln!("\nError: {err}");
+                                spinner.stop_and_replace(&format!("Error: {err}\n"));
                                 return Err(err);
                             }
                         }
                     }
+
+                    // Ensure spinner is stopped if no tokens were received
+                    if first_token {
+                        spinner.stop_and_replace("(No response received)\n");
+                    }
                 }
                 Err(e) => {
-                    eprintln!("Error: {e}");
+                    spinner.stop_and_replace(&format!("Error: {e}\n"));
                     return Err(e);
                 }
             }
         } else {
             // Fall back to non-streaming when system prompt is provided
+            let spinner = Spinner::new("Generating response");
+            spinner.start().await;
+
+            // Small delay to ensure spinner starts
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
             // A future enhancement could build a full ChatRequest with system + user messages.
-            let response = client
-                .chat_with_system(system_prompt.unwrap(), query)
-                .await?;
-            println!("{response}");
+            match client.chat_with_system(system_prompt.unwrap(), query).await {
+                Ok(response) => {
+                    spinner.stop_and_replace(&format!("{response}\n"));
+                }
+                Err(e) => {
+                    spinner.stop_and_replace(&format!("Error: {e}\n"));
+                    return Err(e);
+                }
+            }
         }
     } else {
-        // Non-streaming path
-        let response = if let Some(system) = system_prompt {
-            client.chat_with_system(system, query).await?
+        // Non-streaming path with spinner
+        let spinner = Spinner::new("Generating response");
+        spinner.start().await;
+
+        // Small delay to ensure spinner starts
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+        let result = if let Some(system) = system_prompt {
+            client.chat_with_system(system, query).await
         } else {
-            client.chat(query).await?
+            client.chat(query).await
         };
-        println!("{response}");
+
+        match result {
+            Ok(response) => {
+                spinner.stop_and_replace(&format!("{response}\n"));
+            }
+            Err(e) => {
+                spinner.stop_and_replace(&format!("Error: {e}\n"));
+                return Err(e);
+            }
+        }
     }
 
     Ok(())
