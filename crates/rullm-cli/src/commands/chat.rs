@@ -14,7 +14,7 @@ use rullm_core::simple::{SimpleLlm, SimpleLlmClient};
 use rullm_core::types::{ChatRequestBuilder, ChatRole, ChatStreamEvent};
 use std::borrow::Cow;
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -41,7 +41,7 @@ impl ChatArgs {
     ) -> Result<()> {
         let model_str = resolve_model(&cli.model, &self.model, &cli_config.config.default_model)?;
         let client = client::from_model(&model_str, cli, cli_config)?;
-        run_interactive_chat(&client, None, &cli_config, !cli.no_streaming).await?;
+        run_interactive_chat(&client, None, cli_config, !cli.no_streaming).await?;
         Ok(())
     }
 }
@@ -215,7 +215,7 @@ fn add_common_keybindings(keybindings: &mut reedline::Keybindings) {
 }
 
 /// Setup reedline with all features
-fn setup_reedline(vim_mode: bool, data_path: &PathBuf) -> Result<Reedline> {
+fn setup_reedline(vim_mode: bool, data_path: &Path) -> Result<Reedline> {
     let completer = Box::new(SlashCommandCompleter::new());
 
     // Use the interactive menu to select options from the completer
