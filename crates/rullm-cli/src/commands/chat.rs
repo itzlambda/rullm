@@ -200,14 +200,9 @@ impl Completer for SlashCommandCompleter {
 /// Add common keybindings used by both emacs and vi modes to eliminate duplication
 fn add_common_keybindings(keybindings: &mut reedline::Keybindings) {
     keybindings.add_binding(
-        KeyModifiers::NONE,
+        KeyModifiers::ALT,
         KeyCode::Enter,
-        ReedlineEvent::SubmitOrNewline,
-    );
-    keybindings.add_binding(
-        KeyModifiers::ALT | KeyModifiers::CONTROL,
-        KeyCode::Enter,
-        ReedlineEvent::Submit,
+        ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
     );
     keybindings.add_binding(
         KeyModifiers::NONE,
@@ -227,15 +222,13 @@ fn setup_reedline(vim_mode: bool, data_path: &PathBuf) -> Result<Reedline> {
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
 
     // Setup keybindings for multiline and tab completion
-    let mut keybindings = default_emacs_keybindings();
-    add_common_keybindings(&mut keybindings);
-
     let edit_mode: Box<dyn reedline::EditMode> = if vim_mode {
         let mut vi_insert_keybindings = default_vi_insert_keybindings();
-        let vi_normal_keybindings = default_vi_normal_keybindings();
+        let mut vi_normal_keybindings = default_vi_normal_keybindings();
 
         // Add our common keybindings to vi insert mode
         add_common_keybindings(&mut vi_insert_keybindings);
+        add_common_keybindings(&mut vi_normal_keybindings);
 
         // Add useful emacs shortcuts to vi insert mode for hybrid experience
         vi_insert_keybindings.add_binding(
@@ -271,7 +264,10 @@ fn setup_reedline(vim_mode: bool, data_path: &PathBuf) -> Result<Reedline> {
 
         Box::new(Vi::new(vi_insert_keybindings, vi_normal_keybindings))
     } else {
-        Box::new(Emacs::new(keybindings))
+        let mut emacs_keybindings = default_emacs_keybindings();
+        add_common_keybindings(&mut emacs_keybindings);
+
+        Box::new(Emacs::new(emacs_keybindings))
     };
 
     let history = Box::new(
@@ -501,7 +497,7 @@ pub async fn run_interactive_chat(
                 if let Some(last_time) = last_ctrl_c {
                     // Check if this is a double Ctrl+C within timeout
                     if now.duration_since(last_time) <= DOUBLE_CTRL_C_TIMEOUT {
-                        println!("\n{}", "Goodbye!".green());
+                        println!("{}", "Goodbye!".green());
                         break;
                     }
                 }
@@ -509,7 +505,7 @@ pub async fn run_interactive_chat(
                 // First Ctrl+C or timeout exceeded - show instruction message
                 last_ctrl_c = Some(now);
                 println!(
-                    "\n{}",
+                    "{}",
                     "(To exit, press Ctrl+C again or Ctrl+D or enter \"/quit\")".dimmed()
                 );
             }
