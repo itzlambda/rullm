@@ -94,7 +94,7 @@ pub async fn run() -> Result<()> {
                 let (system_prompt, final_query) = if let Some(template_name) = &cli.template {
                     resolve_template_prompts(template_name, query, &cli_config.config_base_path)?
                 } else {
-                    (None, query.clone())
+                    (cli.system, query.clone())
                 };
 
                 commands::run_single_query(

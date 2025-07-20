@@ -124,10 +124,6 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    /// The user query/prompt
-    #[arg(value_name = "QUERY")]
-    pub query: Option<String>,
-
     /// Model to use in format: provider/model-name (e.g., openai/gpt-4, gemini/gemini-pro, anthropic/claude-3-sonnet)
     #[arg(short, long, add = ArgValueCompleter::new(model_completer))]
     pub model: Option<String>,
@@ -141,7 +137,7 @@ pub struct Cli {
     pub option: Vec<(String, String)>,
 
     /// Verbose output
-    #[arg(short, long, global = true)]
+    #[arg(long, global = true)]
     pub verbose: bool,
 
     /// Quiet output (only show errors)
@@ -151,6 +147,14 @@ pub struct Cli {
     /// Disable streaming output (stream tokens by default)
     #[arg(long, global = true)]
     pub no_streaming: bool,
+
+    /// System prompt
+    #[arg(long, global = true)]
+    pub system: Option<String>,
+
+    /// The user query/prompt
+    #[arg(value_name = "QUERY")]
+    pub query: Option<String>,
 }
 
 pub struct Models {
