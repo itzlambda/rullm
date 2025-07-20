@@ -23,18 +23,20 @@ impl InfoArgs {
         let config_path = cli_config.config_base_path.join(CONFIG_FILE_NAME);
         let models_path = cli_config.data_base_path.join(MODEL_FILE_NAME);
         let keys_path = cli_config.config_base_path.join(KEYS_CONFIG_FILE);
+        let templates_path = cli_config.config_base_path.join(TEMPLATES_DIR_NAME);
 
         // crate::output::heading("Config files:", output_level);
         crate::output::note(
-            &format!("config file = {}", config_path.display()),
+            &format!("config file: {}", config_path.display()),
+            output_level,
+        );
+        crate::output::note(&format!("keys file: {}", keys_path.display()), output_level);
+        crate::output::note(
+            &format!("models cache file: {}", models_path.display()),
             output_level,
         );
         crate::output::note(
-            &format!("keys file = {}", keys_path.display()),
-            output_level,
-        );
-        crate::output::note(
-            &format!("models cache file = {}", models_path.display()),
+            &format!("templates dir: {}", templates_path.display()),
             output_level,
         );
 
