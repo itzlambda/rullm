@@ -4,22 +4,23 @@ use clap_complete::engine::ArgValueCompleter;
 use futures::StreamExt;
 use owo_colors::OwoColorize;
 use reedline::{
-    ColumnarMenu, Completer, DefaultHinter, DefaultValidator, EditCommand, Emacs, KeyCode,
-    KeyModifiers, MenuBuilder, Prompt, PromptEditMode, PromptHistorySearch,
-    PromptHistorySearchStatus, Reedline, ReedlineEvent, ReedlineMenu, Signal, Suggestion, Vi,
-    default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
+    ColumnarMenu, Completer, DefaultHinter, DefaultValidator, EditCommand, Emacs,
+    FileBackedHistory, KeyCode, KeyModifiers, MenuBuilder, Prompt, PromptEditMode,
+    PromptHistorySearch, PromptHistorySearchStatus, Reedline, ReedlineEvent, ReedlineMenu, Signal,
+    Suggestion, Vi, default_emacs_keybindings, default_vi_insert_keybindings,
+    default_vi_normal_keybindings,
 };
 use rullm_core::simple::{SimpleLlm, SimpleLlmClient};
 use rullm_core::types::{ChatRequestBuilder, ChatRole, ChatStreamEvent};
 use std::borrow::Cow;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::{
     args::{Cli, CliConfig, model_completer},
     cli_helpers::resolve_model,
     client,
-    config::Config,
     output::OutputLevel,
     spinner::Spinner,
 };
@@ -40,7 +41,7 @@ impl ChatArgs {
     ) -> Result<()> {
         let model_str = resolve_model(&cli.model, &self.model, &cli_config.config.default_model)?;
         let client = client::from_model(&model_str, cli, cli_config)?;
-        run_interactive_chat(&client, None, &cli_config.config, !cli.no_streaming).await?;
+        run_interactive_chat(&client, None, &cli_config, !cli.no_streaming).await?;
         Ok(())
     }
 }
@@ -219,7 +220,7 @@ fn add_common_keybindings(keybindings: &mut reedline::Keybindings) {
 }
 
 /// Setup reedline with all features
-fn setup_reedline(vim_mode: bool) -> Result<Reedline> {
+fn setup_reedline(vim_mode: bool, data_path: &PathBuf) -> Result<Reedline> {
     let completer = Box::new(SlashCommandCompleter::new());
 
     // Use the interactive menu to select options from the completer
@@ -273,10 +274,16 @@ fn setup_reedline(vim_mode: bool) -> Result<Reedline> {
         Box::new(Emacs::new(keybindings))
     };
 
+    let history = Box::new(
+        FileBackedHistory::with_file(5, data_path.join("history.txt"))
+            .expect("Error configuring history with file"),
+    );
+
     let line_editor = Reedline::create()
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .with_hinter(Box::new(DefaultHinter::default()))
+        .with_history(history)
         .with_validator(Box::new(DefaultValidator))
         .with_edit_mode(edit_mode);
 
@@ -340,7 +347,7 @@ async fn handle_slash_command(
 pub async fn run_interactive_chat(
     client: &SimpleLlmClient,
     initial_system: Option<&str>,
-    config: &Config,
+    config: &CliConfig,
     streaming: bool,
 ) -> Result<()> {
     println!(
@@ -356,7 +363,7 @@ pub async fn run_interactive_chat(
     );
 
     let mut conversation = Vec::new();
-    let mut line_editor = setup_reedline(config.vi_mode)?;
+    let mut line_editor = setup_reedline(config.config.vi_mode, &config.data_base_path)?;
     let prompt = ChatPrompt::new(client.provider_name().to_string());
 
     // Track Ctrl+C presses for double-press exit
