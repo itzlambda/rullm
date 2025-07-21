@@ -154,7 +154,7 @@ pub fn show_cached_models(cli_config: &CliConfig, output_level: OutputLevel) -> 
             .collect::<Vec<_>>();
 
         let message = if model_aliases.is_empty() {
-            format!("{}", crate::output::format_model(m))
+            crate::output::format_model(m)
         } else {
             format!(
                 "{}: (aliases: {})",

@@ -90,29 +90,15 @@ async fn list_aliases(config_path: &Path, output_level: OutputLevel) -> Result<(
     // Load config to determine which are user vs built-in
     let config = UserAliasConfig::load_from_file(config_path)?;
 
-    let mut built_in_aliases = Vec::new();
     let mut user_aliases = Vec::new();
 
     for (alias, target) in aliases {
         if config.aliases.contains_key(&alias.to_lowercase()) {
             user_aliases.push((alias, target));
-        } else {
-            built_in_aliases.push((alias, target));
-        }
-    }
-
-    if !built_in_aliases.is_empty() {
-        crate::output::heading("Built-in aliases:", output_level);
-        for (alias, target) in &built_in_aliases {
-            crate::output::note(&format_alias_display(alias, target), output_level);
         }
     }
 
     if !user_aliases.is_empty() {
-        if !built_in_aliases.is_empty() {
-            crate::output::note("", output_level);
-        }
-        crate::output::heading("User aliases:", output_level);
         for (alias, target) in &user_aliases {
             crate::output::note(&format_alias_display(alias, target), output_level);
         }

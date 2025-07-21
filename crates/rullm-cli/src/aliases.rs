@@ -161,11 +161,6 @@ impl AliasResolver {
     pub fn list_aliases(&self) -> Vec<(String, String)> {
         let mut aliases = Vec::new();
 
-        // Add default aliases
-        for (alias, target) in default_aliases() {
-            aliases.push((alias.clone(), target.clone()));
-        }
-
         // Add user aliases (which can override defaults)
         for (alias, target) in &self.user_aliases {
             aliases.push((alias.clone(), target.clone()));
@@ -210,12 +205,7 @@ impl AliasResolver {
             return self.parse_target(target);
         }
 
-        // 3. Check default aliases
-        if let Some(target) = default_aliases().get(&normalized_input) {
-            return self.parse_target(target);
-        }
-
-        // 4. Try pattern inference (fallback to existing logic)
+        // 3. Try pattern inference (fallback to existing logic)
         self.infer_from_pattern(input)
     }
 
@@ -293,100 +283,6 @@ static GLOBAL_ALIAS_RESOLVER: OnceLock<RwLock<AliasResolver>> = OnceLock::new();
 /// Get the global alias resolver, initializing it if needed
 pub fn get_global_alias_resolver() -> &'static RwLock<AliasResolver> {
     GLOBAL_ALIAS_RESOLVER.get_or_init(|| RwLock::new(AliasResolver::new()))
-}
-
-/// Get default built-in aliases
-/// Returns a map of alias -> canonical provider/model format
-fn default_aliases() -> &'static HashMap<String, String> {
-    static DEFAULT_ALIASES: OnceLock<HashMap<String, String>> = OnceLock::new();
-
-    DEFAULT_ALIASES.get_or_init(|| {
-        let mut aliases = HashMap::new();
-
-        // === OpenAI Aliases ===
-
-        // Popular model shortcuts
-        aliases.insert("gpt4".to_string(), "openai/gpt-4".to_string());
-        aliases.insert("gpt4o".to_string(), "openai/gpt-4o".to_string());
-        aliases.insert("gpt4o-mini".to_string(), "openai/gpt-4o-mini".to_string());
-        aliases.insert("gpt3".to_string(), "openai/gpt-3.5-turbo".to_string());
-        aliases.insert("gpt35".to_string(), "openai/gpt-3.5-turbo".to_string());
-        aliases.insert("turbo".to_string(), "openai/gpt-3.5-turbo".to_string());
-        aliases.insert("chatgpt".to_string(), "openai/gpt-4o".to_string());
-
-        // Reasoning models
-        aliases.insert("o1".to_string(), "openai/o1".to_string());
-        aliases.insert("o1-mini".to_string(), "openai/o1-mini".to_string());
-        aliases.insert("o1-preview".to_string(), "openai/o1-preview".to_string());
-
-        // === Anthropic Aliases ===
-
-        // Claude shortcuts
-        aliases.insert(
-            "claude".to_string(),
-            "anthropic/claude-3-5-sonnet-20241022".to_string(),
-        );
-        aliases.insert(
-            "claude3".to_string(),
-            "anthropic/claude-3-5-sonnet-20241022".to_string(),
-        );
-        aliases.insert(
-            "claude35".to_string(),
-            "anthropic/claude-3-5-sonnet-20241022".to_string(),
-        );
-        aliases.insert(
-            "sonnet".to_string(),
-            "anthropic/claude-3-5-sonnet-20241022".to_string(),
-        );
-        aliases.insert(
-            "opus".to_string(),
-            "anthropic/claude-3-opus-20240229".to_string(),
-        );
-        aliases.insert(
-            "haiku".to_string(),
-            "anthropic/claude-3-haiku-20240307".to_string(),
-        );
-
-        // Version-specific shortcuts
-        aliases.insert(
-            "claude-3-sonnet".to_string(),
-            "anthropic/claude-3-sonnet-20240229".to_string(),
-        );
-        aliases.insert(
-            "claude-3-opus".to_string(),
-            "anthropic/claude-3-opus-20240229".to_string(),
-        );
-        aliases.insert(
-            "claude-3-haiku".to_string(),
-            "anthropic/claude-3-haiku-20240307".to_string(),
-        );
-
-        // === Google Aliases ===
-
-        // Gemini shortcuts
-        aliases.insert("gemini".to_string(), "google/gemini-1.5-pro".to_string());
-        aliases.insert(
-            "gemini-pro".to_string(),
-            "google/gemini-2.5-pro".to_string(),
-        );
-        aliases.insert(
-            "gemini-flash".to_string(),
-            "google/gemini-1.5-flash".to_string(),
-        );
-        aliases.insert(
-            "gemini2".to_string(),
-            "google/gemini-2.0-flash-exp".to_string(),
-        );
-        aliases.insert(
-            "gemini-2".to_string(),
-            "google/gemini-2.0-flash-exp".to_string(),
-        );
-
-        // Legacy support
-        aliases.insert("bard".to_string(), "google/gemini-1.5-pro".to_string());
-
-        aliases
-    })
 }
 
 #[cfg(test)]
