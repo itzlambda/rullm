@@ -5,6 +5,7 @@
 //! the full rullm-cli crate.
 
 use anyhow::Result;
+use std::io::Read;
 
 /// Helper function to resolve model priority: global CLI model, command-specific model, or default
 ///
@@ -46,4 +47,47 @@ pub fn resolve_direct_query_model(
                 "Model is required for direct queries. Use --model in format 'provider/model_name' (e.g., openai/gpt-4o) or set a default_model in config"
             )
         })
+}
+
+/// Merges piped stdin and an optional query argument into a single query string.
+///
+/// - If stdin is piped and contains data, reads it.
+///   - If a query argument is also provided, appends it to the stdin content (with a newline if needed).
+///   - If only stdin is present, returns its content.
+/// - If only a query argument is present, returns it.
+/// - If neither is present, returns None.
+///
+/// This is used to support CLI usage like:
+///   cat foo.py | rullm 'explain this'   // stdin + arg
+///   cat foo.py | rullm                  // stdin only
+///   rullm 'explain this'                // arg only
+pub fn merge_stdin_and_query(query: Option<String>) -> Option<String> {
+    let mut stdin_buf = String::new();
+    let stdin_piped = !atty::is(atty::Stream::Stdin)
+        && std::io::stdin().read_to_string(&mut stdin_buf).is_ok()
+        && !stdin_buf.trim().is_empty();
+
+    match (stdin_piped, query) {
+        (true, Some(arg_query)) => {
+            // Both stdin and query arg: append arg to stdin
+            let combined = if stdin_buf.ends_with('\n') {
+                format!("{stdin_buf}{arg_query}")
+            } else {
+                format!("{stdin_buf}\n{arg_query}")
+            };
+            Some(combined)
+        }
+        (true, None) => {
+            // Only stdin
+            Some(stdin_buf)
+        }
+        (false, Some(arg_query)) => {
+            // Only query arg
+            Some(arg_query)
+        }
+        (false, None) => {
+            // Neither
+            None
+        }
+    }
 }

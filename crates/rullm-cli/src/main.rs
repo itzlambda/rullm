@@ -21,6 +21,8 @@ use commands::Commands;
 use output::OutputLevel;
 use templates::resolve_template_prompts;
 
+use crate::cli_helpers::merge_stdin_and_query;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     run().await
@@ -31,7 +33,8 @@ async fn main() -> Result<()> {
 pub async fn run() -> Result<()> {
     // Enable shell completion generation when the user sets COMPLETE=fish etc.
     clap_complete::CompleteEnv::with_factory(Cli::command).complete();
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    cli.query = merge_stdin_and_query(cli.query.take());
 
     let mut cli_config = CliConfig::load();
 
