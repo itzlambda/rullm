@@ -1,16 +1,16 @@
 use anyhow::Result;
 use chrono::Utc;
 use clap::{Args, Subcommand};
-use clap_complete::engine::ArgValueCompleter;
 use rullm_core::{LlmError, SimpleLlm, SimpleLlmClient};
+use strum::IntoEnumIterator;
 
 use crate::{
-    args::{Cli, CliConfig, model_completer},
-    cli_helpers::resolve_model,
+    args::{Cli, CliConfig},
     client,
     commands::{ModelsCache, format_duration},
     constants::MODEL_FILE_NAME,
     output::OutputLevel,
+    provider::Provider,
 };
 
 #[derive(Args)]
@@ -28,12 +28,8 @@ pub enum ModelsAction {
         /// Model identifier in the form provider/model-name (e.g. openai/gpt-4o)
         model: Option<String>,
     },
-    /// Fetch fresh models from provider and update local cache
-    Update {
-        /// Model to use in format: provider/model-name (e.g., openai/gpt-4, gemini/gemini-pro, anthropic/claude-3-sonnet)
-        #[arg(short, long, add = ArgValueCompleter::new(model_completer))]
-        model: Option<String>,
-    },
+    /// Fetch fresh models from all providers with available API keys and update local cache
+    Update,
     /// Clear the local models cache
     Clear,
 }
@@ -68,12 +64,35 @@ impl ModelsArgs {
                     }
                 }
             }
-            ModelsAction::Update { model } => {
-                let model_str = resolve_model(&cli.model, model, &cli_config.config.default_model)?;
-                let client = client::from_model(&model_str, cli, cli_config)?;
-                update_models(cli_config, &client, output_level)
-                    .await
-                    .map_err(anyhow::Error::from)?;
+            ModelsAction::Update => {
+                // List of supported providers
+                let providers = Provider::iter();
+                let mut updated = vec![];
+                let mut skipped = vec![];
+
+                for provider in providers {
+                    let provider = format!("{provider}");
+                    // Try to create a client for this provider
+                    let model_hint = format!("{provider}/dummy"); // dummy model name, just to get the client
+                    let client = match client::from_model(&model_hint, cli, cli_config) {
+                        Ok(c) => c,
+                        Err(_) => {
+                            skipped.push(provider);
+                            continue;
+                        }
+                    };
+                    match update_models(cli_config, &client, output_level).await {
+                        Ok(_) => updated.push(provider),
+                        Err(_) => skipped.push(provider),
+                    }
+                }
+
+                if !skipped.is_empty() {
+                    crate::output::note(
+                        &format!("Skipped (no API key or error): {}", skipped.join(", ")),
+                        output_level,
+                    );
+                }
             }
             ModelsAction::Clear => {
                 clear_models_cache(cli_config, output_level)?;
@@ -204,11 +223,23 @@ fn cache_models(cli_config: &CliConfig, provider_name: &str, models: &[String]) 
         fs::create_dir_all(parent)?;
     }
 
-    // Prepend provider name to model list as "provider/model"
-    let entries: Vec<String> = models
+    // Load existing cache if present
+    let mut entries = if let Ok(Some(cache)) = load_models_cache(cli_config) {
+        cache.models
+    } else {
+        Vec::new()
+    };
+
+    // Remove all entries for this provider
+    let prefix = format!("{}/", provider_name.to_lowercase());
+    entries.retain(|m| !m.starts_with(&prefix));
+
+    // Add new models for this provider
+    let new_entries: Vec<String> = models
         .iter()
         .map(|m| format!("{}/{}", provider_name.to_lowercase(), m))
         .collect();
+    entries.extend(new_entries);
 
     let cache = ModelsCache::new(entries);
     let json = serde_json::to_string_pretty(&cache)?;
