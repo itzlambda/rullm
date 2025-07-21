@@ -579,11 +579,43 @@ impl SimpleLlm for SimpleLlmClient {
     }
 
     async fn models(&self) -> Result<Vec<String>, LlmError> {
-        match self {
-            SimpleLlmClient::OpenAI { provider, .. } => provider.available_models().await,
-            SimpleLlmClient::Anthropic { provider, .. } => provider.available_models().await,
-            SimpleLlmClient::Google { provider, .. } => provider.available_models().await,
-        }
+        let models = match self {
+            SimpleLlmClient::OpenAI { provider, .. } => {
+                let models = provider.available_models().await?;
+                models
+                    .into_iter()
+                    // filter out non-chat models
+                    .filter(|m| {
+                        (m.starts_with("o") || m.starts_with("gpt"))
+                            && (!m.contains("audio")
+                                && !m.contains("deep")
+                                && !m.contains("image")
+                                && !m.contains("search")
+                                && !m.contains("transcribe")
+                                && !m.contains("realtime")
+                                && !m.contains("moderation"))
+                    })
+                    .collect::<Vec<_>>()
+            }
+            SimpleLlmClient::Anthropic { provider, .. } => {
+                let models = provider.available_models().await?;
+                models
+                    .into_iter()
+                    // filter out non-chat models
+                    .filter(|m| m.starts_with("claude"))
+                    .collect::<Vec<_>>()
+            }
+            SimpleLlmClient::Google { provider, .. } => {
+                let models = provider.available_models().await?;
+                models
+                    .into_iter()
+                    // filter out non-chat models
+                    .filter(|m| m.starts_with("gemini") && !m.contains("embedding"))
+                    .collect::<Vec<_>>()
+            }
+        };
+
+        Ok(models)
     }
 
     async fn health_check(&self) -> Result<(), LlmError> {
