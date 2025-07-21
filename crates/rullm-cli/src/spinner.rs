@@ -8,17 +8,23 @@ use tokio::time::interval;
 pub struct Spinner {
     is_active: Arc<AtomicBool>,
     message: String,
+    disabled: bool,
 }
 
 impl Spinner {
     pub fn new(message: &str) -> Self {
+        let disabled = !atty::is(atty::Stream::Stdout);
         Self {
             is_active: Arc::new(AtomicBool::new(false)),
             message: message.to_string(),
+            disabled,
         }
     }
 
     pub async fn start(&self) {
+        if self.disabled {
+            return;
+        }
         self.is_active.store(true, Ordering::Relaxed);
         let is_active = Arc::clone(&self.is_active);
         let message = self.message.clone();
@@ -50,6 +56,9 @@ impl Spinner {
     }
 
     pub fn stop(&self) {
+        if self.disabled {
+            return;
+        }
         self.is_active.store(false, Ordering::Relaxed);
         // Clear the line
         print!("\r\x1b[K");
@@ -57,6 +66,10 @@ impl Spinner {
     }
 
     pub fn stop_and_replace(&self, replacement: &str) {
+        if self.disabled {
+            println!("{replacement}");
+            return;
+        }
         self.is_active.store(false, Ordering::Relaxed);
         // Clear the line and print replacement
         print!("\r\x1b[K{replacement}");
