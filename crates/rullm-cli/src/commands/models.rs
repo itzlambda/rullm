@@ -153,16 +153,29 @@ pub async fn set_default_model(
     model: &str,
     output_level: OutputLevel,
 ) -> Result<()> {
-    cli_config.config.default_model = Some(model.to_string());
-    cli_config.config.save(&cli_config.config_base_path)?;
+    let models_cache = load_models_cache(cli_config)?.unwrap_or(ModelsCache::new(vec![]));
 
-    crate::output::success(
-        &format!(
-            "Default model set to {}",
-            crate::output::format_model(model)
-        ),
-        output_level,
-    );
+    if models_cache.models.contains(&model.to_string()) {
+        cli_config.config.default_model = Some(model.to_string());
+        cli_config.config.save(&cli_config.config_base_path)?;
+
+        crate::output::success(
+            &format!(
+                "Default model set to {}",
+                crate::output::format_model(model)
+            ),
+            output_level,
+        );
+    } else {
+        crate::output::error_with_suggestion(
+            &format!("Model \"{model}\" not found in cache"),
+            &format!(
+                "Try running \"{} models update\" to update the cache",
+                crate::constants::BINARY_NAME
+            ),
+            output_level,
+        );
+    }
     Ok(())
 }
 
