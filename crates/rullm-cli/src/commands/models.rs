@@ -5,10 +5,11 @@ use rullm_core::{LlmError, SimpleLlm, SimpleLlmClient};
 use strum::IntoEnumIterator;
 
 use crate::{
+    aliases::UserAliasConfig,
     args::{Cli, CliConfig},
     client,
     commands::{ModelsCache, format_duration},
-    constants::MODEL_FILE_NAME,
+    constants::{ALIASES_CONFIG_FILE, MODEL_FILE_NAME},
     output::OutputLevel,
     provider::Provider,
 };
@@ -141,8 +142,28 @@ pub fn show_cached_models(cli_config: &CliConfig, output_level: OutputLevel) -> 
         }
     }
 
+    let alias_config_path = &cli_config.config_base_path.join(ALIASES_CONFIG_FILE);
+    let aliases = UserAliasConfig::load_from_file(alias_config_path)?;
+
     for m in entries.iter() {
-        crate::output::note(&crate::output::format_model(m), output_level);
+        let model_aliases = aliases
+            .aliases
+            .iter()
+            .filter(|(_, v)| v.starts_with(m))
+            .map(|(k, _)| k.clone())
+            .collect::<Vec<_>>();
+
+        let message = if model_aliases.is_empty() {
+            format!("{}", crate::output::format_model(m))
+        } else {
+            format!(
+                "{}: (aliases: {})",
+                crate::output::format_model(m),
+                model_aliases.join(", ")
+            )
+        };
+
+        crate::output::note(&message, output_level);
     }
 
     Ok(())
