@@ -21,6 +21,9 @@ rullm -t code-review "Review this function"
 # Interactive chat
 rullm chat --model claude
 
+# Chat history is saved between sessions.
+# Use Alt+Enter for multiline input in chat mode.
+
 rullm "Tell me a story"
 rullm --model gpt4 "Explain quantum computing in detail"
 rullm chat --model claude
@@ -32,6 +35,26 @@ rullm chat --no-streaming --model gemini
 # Set up your API keys
 rullm keys set openai
 export OPENAI_API_KEY="your-key-here"
+```
+
+### Piping files and merging with queries
+
+You can pipe files or stdin into `rullm` and optionally add a query string. The CLI will merge both, making it easy to work with code or text files:
+
+```bash
+# Just pipe a file (stdin only)
+cat foo.py | rullm
+
+# Pipe a file and add a query (stdin + arg)
+cat foo.py | rullm "explain this code"
+```
+
+### System prompt on the fly
+
+You can pass a system prompt directly to the model using the `--system` argument. This lets you customize the LLM's behavior for a single request:
+
+```bash
+rullm --system "You are a helpful assistant." "Summarize this text"
 ```
 ## 🔧 CLI Commands
 
