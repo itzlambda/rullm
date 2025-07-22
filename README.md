@@ -23,6 +23,8 @@ rullm chat --model claude
 
 # Chat history is saved between sessions.
 # Use Alt+Enter for multiline input in chat mode.
+# In chat, type /edit to open your $EDITOR and compose a message.
+# Press Ctrl+O in chat to open a buffer for editing your prompt directly.
 
 rullm "Tell me a story"
 rullm --model gpt4 "Explain quantum computing in detail"
@@ -61,8 +63,11 @@ rullm --system "You are a helpful assistant." "Summarize this text"
 ### Model Management
 
 ```bash
-# List available models
+# List available models (shows only chat models, with your aliases)
 rullm models list
+
+# Update model list for all providers with API keys
+rullm models update
 
 # Manage aliases
 rullm alias list
@@ -107,18 +112,9 @@ user_prompt = "Please review this code: {{input}}"
 
 - `{{input}}` – Automatically filled with the user's query text.
 
-### Built-in Model Aliases
+### Model Aliases
 
-| Alias | Full Model |
-|-------|------------|
-| `gpt4` | `openai/gpt-4` |
-| `gpt4o` | `openai/gpt-4o` |
-| `turbo` | `openai/gpt-3.5-turbo` |
-| `claude` | `anthropic/claude-3-5-sonnet-20241022` |
-| `sonnet` | `anthropic/claude-3-5-sonnet-20241022` |
-| `opus` | `anthropic/claude-3-opus-20240229` |
-| `gemini` | `google/gemini-1.5-pro` |
-| `gemini-flash` | `google/gemini-1.5-flash` |
+Model aliases are now user-defined. Use `rullm alias add <alias> <provider/model>` to create your own shortcuts. Use `rullm alias list` to see your aliases.
 
 ## Shell Completion
 
