@@ -13,7 +13,9 @@ use rullm_core::simple::{SimpleLlm, SimpleLlmClient};
 use rullm_core::types::ChatRole;
 use std::borrow::Cow;
 use std::path::Path;
+use std::process::Command;
 use std::time::{Duration, Instant};
+use tempfile::NamedTempFile;
 
 use crate::{
     args::{Cli, CliConfig, model_completer},
@@ -231,38 +233,6 @@ fn setup_reedline(vim_mode: bool, data_path: &Path) -> Result<Reedline> {
         add_common_keybindings(&mut vi_insert_keybindings);
         add_common_keybindings(&mut vi_normal_keybindings);
 
-        // Add useful emacs shortcuts to vi insert mode for hybrid experience
-        vi_insert_keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('u'),
-            ReedlineEvent::Edit(vec![EditCommand::CutFromLineStart]),
-        );
-        vi_insert_keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('k'),
-            ReedlineEvent::Edit(vec![EditCommand::CutToLineEnd]),
-        );
-        vi_insert_keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('w'),
-            ReedlineEvent::Edit(vec![EditCommand::CutWordLeft]),
-        );
-        vi_insert_keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('a'),
-            ReedlineEvent::Edit(vec![EditCommand::MoveToLineStart { select: false }]),
-        );
-        vi_insert_keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('e'),
-            ReedlineEvent::Edit(vec![EditCommand::MoveToLineEnd { select: false }]),
-        );
-        vi_insert_keybindings.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('l'),
-            ReedlineEvent::ClearScreen,
-        );
-
         Box::new(Vi::new(vi_insert_keybindings, vi_normal_keybindings))
     } else {
         let mut emacs_keybindings = default_emacs_keybindings();
@@ -276,15 +246,22 @@ fn setup_reedline(vim_mode: bool, data_path: &Path) -> Result<Reedline> {
             .expect("Error configuring history with file"),
     );
 
+    let temp_file = NamedTempFile::new()?;
+    let editor = get_preferred_editor();
     let line_editor = Reedline::create()
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .with_hinter(Box::new(DefaultHinter::default()))
         .with_history(history)
         .with_validator(Box::new(DefaultValidator))
+        .with_buffer_editor(Command::new(editor), temp_file.path().to_path_buf())
         .with_edit_mode(edit_mode);
 
     Ok(line_editor)
+}
+
+fn get_preferred_editor() -> String {
+    std::env::var("EDITOR").unwrap_or_else(|_| "nvim".to_string())
 }
 
 pub enum HandleCommandResult {
@@ -331,7 +308,6 @@ async fn handle_slash_command(
         }
         SlashCommand::Quit => Ok(HandleCommandResult::Quit),
         SlashCommand::Edit => {
-            use std::env;
             use std::io::Read;
             use std::process::Command;
             use tempfile::NamedTempFile;
@@ -340,7 +316,7 @@ async fn handle_slash_command(
             // Optionally, pre-fill with last user message or blank
             // std::fs::write(tmp.path(), "")?;
 
-            let editor = env::var("EDITOR").unwrap_or_else(|_| "nvim".to_string());
+            let editor = get_preferred_editor();
             let status = Command::new(&editor).arg(tmp.path()).status();
 
             match status {
