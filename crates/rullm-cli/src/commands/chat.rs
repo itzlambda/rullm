@@ -1,7 +1,6 @@
 use anyhow::Result;
 use clap::Args;
 use clap_complete::engine::ArgValueCompleter;
-use futures::StreamExt;
 use owo_colors::OwoColorize;
 use reedline::{
     ColumnarMenu, Completer, DefaultHinter, DefaultValidator, EditCommand, Emacs,
@@ -11,9 +10,8 @@ use reedline::{
     default_vi_normal_keybindings,
 };
 use rullm_core::simple::{SimpleLlm, SimpleLlmClient};
-use rullm_core::types::{ChatRequestBuilder, ChatRole, ChatStreamEvent};
+use rullm_core::types::ChatRole;
 use std::borrow::Cow;
-use std::io::{self, Write};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
@@ -22,7 +20,6 @@ use crate::{
     cli_helpers::resolve_model,
     client,
     output::OutputLevel,
-    spinner::Spinner,
 };
 
 #[derive(Args)]
@@ -116,6 +113,7 @@ enum SlashCommand {
     Reset,
     Help,
     Quit,
+    Edit,
     Unknown(String),
 }
 
@@ -140,6 +138,7 @@ impl SlashCommand {
             "reset" => SlashCommand::Reset,
             "help" => SlashCommand::Help,
             "quit" | "exit" => SlashCommand::Quit,
+            "edit" => SlashCommand::Edit,
             _ => SlashCommand::Unknown(command),
         })
     }
@@ -160,6 +159,7 @@ impl SlashCommandCompleter {
                 "/help".to_string(),
                 "/quit".to_string(),
                 "/exit".to_string(),
+                "/edit".to_string(),
             ],
         }
     }
@@ -185,6 +185,7 @@ impl Completer for SlashCommandCompleter {
                     "/help" => Some("Show available commands".to_string()),
                     "/quit" => Some("Exit chat".to_string()),
                     "/exit" => Some("Exit chat".to_string()),
+                    "/edit" => Some("Edit message in $EDITOR".to_string()),
                     _ => None,
                 },
                 style: None,
@@ -286,25 +287,25 @@ fn setup_reedline(vim_mode: bool, data_path: &Path) -> Result<Reedline> {
     Ok(line_editor)
 }
 
+pub enum HandleCommandResult {
+    NoOp,
+    Quit,
+    Edit(String),
+}
 /// Handle slash commands
 async fn handle_slash_command(
     command: SlashCommand,
     conversation: &mut Vec<(ChatRole, String)>,
     _client: &SimpleLlmClient,
-) -> Result<bool> {
+) -> Result<HandleCommandResult> {
     match command {
         SlashCommand::System(msg) => {
             if msg.is_empty() {
                 println!("{}", "Usage: /system <message>".yellow());
-                return Ok(false);
+                return Ok(HandleCommandResult::NoOp);
             }
-
-            // Remove existing system message if present
             conversation.retain(|(role, _)| *role != ChatRole::System);
-
-            // Add new system message at the beginning
             conversation.insert(0, (ChatRole::System, msg.clone()));
-
             println!(
                 "{} {} {} {}",
                 "System".green().bold(),
@@ -312,20 +313,63 @@ async fn handle_slash_command(
                 "updated:".green(),
                 msg.dimmed()
             );
+            Ok(HandleCommandResult::NoOp)
         }
         SlashCommand::Reset => {
             conversation.clear();
             println!("{}", "Conversation reset.".green());
+            Ok(HandleCommandResult::NoOp)
         }
         SlashCommand::Help => {
             println!("{}", "Available commands:".green().bold());
             println!("  {} - Set system prompt", "/system <message>".yellow());
             println!("  {} - Clear conversation history", "/reset".yellow());
             println!("  {} - Show this help", "/help".yellow());
+            println!("  {} - Edit next message in $EDITOR", "/edit".yellow());
             println!("  {} - Exit chat", "/quit or /exit".yellow());
+            Ok(HandleCommandResult::NoOp)
         }
-        SlashCommand::Quit => {
-            return Ok(true);
+        SlashCommand::Quit => Ok(HandleCommandResult::Quit),
+        SlashCommand::Edit => {
+            use std::env;
+            use std::io::Read;
+            use std::process::Command;
+            use tempfile::NamedTempFile;
+
+            let tmp = NamedTempFile::new()?;
+            // Optionally, pre-fill with last user message or blank
+            // std::fs::write(tmp.path(), "")?;
+
+            let editor = env::var("EDITOR").unwrap_or_else(|_| "nvim".to_string());
+            let status = Command::new(&editor).arg(tmp.path()).status();
+
+            match status {
+                Ok(status) if status.success() => {
+                    let mut file = tmp.reopen()?;
+                    let mut contents = String::new();
+                    file.read_to_string(&mut contents)?;
+                    let contents = contents.trim().to_string();
+                    if contents.is_empty() {
+                        println!("{}", "No input provided in editor.".yellow());
+                        Ok(HandleCommandResult::NoOp)
+                    } else {
+                        Ok(HandleCommandResult::Edit(contents))
+                    }
+                }
+                Ok(_) => {
+                    println!("{}", "Editor exited with error".red());
+                    Ok(HandleCommandResult::NoOp)
+                }
+                Err(e) => {
+                    println!("{} {}", "Failed to launch editor:".red(), e);
+                    println!(
+                        "{} {}",
+                        "Try setting $EDITOR environment variable or installing neovim".red(),
+                        e
+                    );
+                    Ok(HandleCommandResult::NoOp)
+                }
+            }
         }
         SlashCommand::Unknown(cmd) => {
             println!(
@@ -334,9 +378,9 @@ async fn handle_slash_command(
                 cmd.yellow(),
                 "/help".yellow()
             );
+            Ok(HandleCommandResult::NoOp)
         }
     }
-    Ok(false)
 }
 
 /// Run enhanced interactive chat with reedline
@@ -372,137 +416,137 @@ pub async fn run_interactive_chat(
         println!("{} {}\n", "System:".green().bold(), system.dimmed());
     }
 
+    // Helper function to DRY up message sending logic
+    async fn process_user_message(
+        input: &str,
+        conversation: &mut Vec<(ChatRole, String)>,
+        client: &SimpleLlmClient,
+        streaming: bool,
+    ) -> Result<()> {
+        use crate::spinner::Spinner;
+        use futures::StreamExt;
+        use owo_colors::OwoColorize;
+        use rullm_core::types::{ChatRequestBuilder, ChatRole, ChatStreamEvent};
+        use std::io::{self, Write};
+        use tokio::time;
+
+        conversation.push((ChatRole::User, input.to_string()));
+        if streaming {
+            let spinner = Spinner::new("Assistant:");
+            spinner.start().await;
+            time::sleep(time::Duration::from_millis(10)).await;
+            let mut builder = ChatRequestBuilder::new().stream(true);
+            for (role, content) in &*conversation {
+                builder = builder.add_message(role.clone(), content);
+            }
+            let request = builder.build();
+            match client.stream_chat_raw(request).await {
+                Ok(mut stream) => {
+                    let mut full_response = String::new();
+                    let mut first_token = true;
+                    while let Some(evt) = stream.next().await {
+                        match evt {
+                            Ok(ChatStreamEvent::Token(tok)) => {
+                                if first_token {
+                                    spinner.stop_and_replace(&format!(
+                                        "{} ",
+                                        "Assistant:".blue().bold()
+                                    ));
+                                    first_token = false;
+                                }
+                                full_response.push_str(&tok);
+                                print!("{tok}");
+                                io::stdout().flush()?;
+                            }
+                            Ok(ChatStreamEvent::Done) => {
+                                println!();
+                                conversation.push((ChatRole::Assistant, full_response));
+                                break;
+                            }
+                            Ok(ChatStreamEvent::Error(msg)) => {
+                                spinner.stop_and_replace(&format!(
+                                    "{} {}\n",
+                                    "Error:".red().bold(),
+                                    msg
+                                ));
+                                break;
+                            }
+                            Err(err) => {
+                                spinner.stop_and_replace(&format!(
+                                    "{} {}\n",
+                                    "Error:".red().bold(),
+                                    err
+                                ));
+                                break;
+                            }
+                        }
+                    }
+                    if first_token {
+                        spinner.stop_and_replace(&format!(
+                            "{} {}\n",
+                            "Assistant:".blue().bold(),
+                            "(No response received)".dimmed()
+                        ));
+                    }
+                }
+                Err(e) => {
+                    spinner.stop_and_replace(&format!("{} {}\n", "Error:".red().bold(), e));
+                }
+            }
+        } else {
+            let spinner = Spinner::new("Assistant:");
+            spinner.start().await;
+            time::sleep(time::Duration::from_millis(10)).await;
+            match client.conversation(conversation.clone()).await {
+                Ok(response) => {
+                    spinner.stop_and_replace(&format!(
+                        "{} {}\n",
+                        "Assistant:".blue().bold(),
+                        response
+                    ));
+                    conversation.push((ChatRole::Assistant, response));
+                }
+                Err(e) => {
+                    spinner.stop_and_replace(&format!("{} {}\n", "Error:".red().bold(), e));
+                }
+            }
+        }
+        Ok(())
+    }
+
     loop {
         let sig = line_editor.read_line(&prompt)?;
         match sig {
             Signal::Success(input) => {
-                // Reset Ctrl+C counter on successful input
                 last_ctrl_c = None;
-
                 let input = input.trim();
                 if input.is_empty() {
                     continue;
                 }
-
-                // Check for slash commands
                 if let Some(command) = SlashCommand::parse(input) {
-                    if handle_slash_command(command, &mut conversation, client).await? {
-                        break; // Quit command
+                    let result = handle_slash_command(command, &mut conversation, client).await?;
+                    match result {
+                        HandleCommandResult::Quit => {
+                            break;
+                        }
+                        HandleCommandResult::Edit(edited_input) => {
+                            line_editor
+                                .run_edit_commands(&[EditCommand::InsertString(edited_input)]);
+                        }
+                        HandleCommandResult::NoOp => {}
                     }
                     continue;
                 }
-
-                // Regular chat message
-                conversation.push((ChatRole::User, input.to_string()));
-
-                if streaming {
-                    // Show spinner while waiting for first token
-                    let spinner = Spinner::new("Assistant:");
-                    spinner.start().await;
-
-                    // Small delay to ensure spinner starts
-                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-                    // Build ChatRequest with full conversation + current user message
-                    let mut builder = ChatRequestBuilder::new().stream(true);
-                    for (role, content) in &conversation {
-                        builder = builder.add_message(role.clone(), content);
-                    }
-
-                    let request = builder.build();
-
-                    match client.stream_chat_raw(request).await {
-                        Ok(mut stream) => {
-                            let mut full_response = String::new();
-                            let mut first_token = true;
-
-                            while let Some(evt) = stream.next().await {
-                                match evt {
-                                    Ok(ChatStreamEvent::Token(tok)) => {
-                                        if first_token {
-                                            // Stop spinner and show Assistant label on first token
-                                            spinner.stop_and_replace(&format!(
-                                                "{} ",
-                                                "Assistant:".blue().bold()
-                                            ));
-                                            first_token = false;
-                                        }
-                                        full_response.push_str(&tok);
-                                        print!("{tok}");
-                                        io::stdout().flush()?;
-                                    }
-                                    Ok(ChatStreamEvent::Done) => {
-                                        println!();
-                                        conversation.push((ChatRole::Assistant, full_response));
-                                        break;
-                                    }
-                                    Ok(ChatStreamEvent::Error(msg)) => {
-                                        spinner.stop_and_replace(&format!(
-                                            "{} {}\n",
-                                            "Error:".red().bold(),
-                                            msg
-                                        ));
-                                        break;
-                                    }
-                                    Err(err) => {
-                                        spinner.stop_and_replace(&format!(
-                                            "{} {}\n",
-                                            "Error:".red().bold(),
-                                            err
-                                        ));
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Ensure spinner is stopped if no tokens were received
-                            if first_token {
-                                spinner.stop_and_replace(&format!(
-                                    "{} {}\n",
-                                    "Assistant:".blue().bold(),
-                                    "(No response received)".dimmed()
-                                ));
-                            }
-                        }
-                        Err(e) => {
-                            spinner.stop_and_replace(&format!("{} {}\n", "Error:".red().bold(), e));
-                        }
-                    }
-                } else {
-                    // Non-streaming with spinner
-                    let spinner = Spinner::new("Assistant:");
-                    spinner.start().await;
-
-                    // Small delay to ensure spinner starts
-                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-                    match client.conversation(conversation.clone()).await {
-                        Ok(response) => {
-                            spinner.stop_and_replace(&format!(
-                                "{} {}\n",
-                                "Assistant:".blue().bold(),
-                                response
-                            ));
-                            conversation.push((ChatRole::Assistant, response));
-                        }
-                        Err(e) => {
-                            spinner.stop_and_replace(&format!("{} {}\n", "Error:".red().bold(), e));
-                        }
-                    }
-                }
+                process_user_message(input, &mut conversation, client, streaming).await?;
             }
             Signal::CtrlC => {
                 let now = Instant::now();
-
                 if let Some(last_time) = last_ctrl_c {
-                    // Check if this is a double Ctrl+C within timeout
                     if now.duration_since(last_time) <= DOUBLE_CTRL_C_TIMEOUT {
                         println!("{}", "Goodbye!".green());
                         break;
                     }
                 }
-
-                // First Ctrl+C or timeout exceeded - show instruction message
                 last_ctrl_c = Some(now);
                 println!(
                     "{}",
