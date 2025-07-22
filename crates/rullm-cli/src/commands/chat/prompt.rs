@@ -4,14 +4,12 @@ use std::borrow::Cow;
 
 #[derive(Clone)]
 pub struct ChatPrompt {
-    pub provider_name: String,
     pub multiline_mode: bool,
 }
 
 impl ChatPrompt {
-    pub(crate) fn new(provider_name: String) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
-            provider_name,
             multiline_mode: false,
         }
     }
@@ -27,11 +25,7 @@ impl Prompt for ChatPrompt {
     }
 
     fn render_prompt_right(&self) -> Cow<str> {
-        if self.multiline_mode {
-            Cow::Borrowed("")
-        } else {
-            Cow::Owned(format!("[{}]", self.provider_name.blue()))
-        }
+        Cow::Borrowed("")
     }
 
     fn render_prompt_indicator(&self, edit_mode: PromptEditMode) -> Cow<str> {

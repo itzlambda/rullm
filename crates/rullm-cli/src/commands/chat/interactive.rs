@@ -16,10 +16,10 @@ pub async fn run_interactive_chat(
     use super::{ChatPrompt, setup_reedline};
 
     println!(
-        "{} {} {}",
+        "{} {}/{}",
         "Interactive chat with".green(),
         client.provider_name().blue().bold(),
-        "(Ctrl+C to exit)".dimmed()
+        client.model_name().blue().bold(),
     );
     println!(
         "{} Type {} for available commands.",
@@ -32,11 +32,11 @@ pub async fn run_interactive_chat(
         "exit".yellow(),
         "quit".yellow()
     );
-    println!("");
+    println!();
 
     let mut conversation = Vec::new();
     let mut line_editor = setup_reedline(config.config.vi_mode, &config.data_base_path)?;
-    let prompt = ChatPrompt::new(client.provider_name().to_string());
+    let prompt = ChatPrompt::new();
 
     // Track Ctrl+C presses for double-press exit
     let mut last_ctrl_c: Option<Instant> = None;

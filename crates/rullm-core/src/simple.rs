@@ -804,6 +804,15 @@ impl SimpleLlmClient {
             | SimpleLlmClient::Google { config, .. } => config,
         }
     }
+
+    /// Returns the model name used by this client (the default model for the provider)
+    pub fn model_name(&self) -> &str {
+        match self {
+            SimpleLlmClient::OpenAI { config, .. } => &config.default_models.openai,
+            SimpleLlmClient::Anthropic { config, .. } => &config.default_models.anthropic,
+            SimpleLlmClient::Google { config, .. } => &config.default_models.google,
+        }
+    }
 }
 
 #[cfg(test)]
