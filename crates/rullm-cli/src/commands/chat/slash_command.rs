@@ -15,6 +15,17 @@ pub enum SlashCommand {
 
 impl SlashCommand {
     pub(crate) fn parse(input: &str) -> Option<Self> {
+        // special case for some shortcuts
+        if input.len() <= 5 {
+            match input.to_lowercase().as_str() {
+                "quit" | "exit" => return Some(SlashCommand::Quit),
+                "help" => return Some(SlashCommand::Help),
+                "reset" => return Some(SlashCommand::Reset),
+                "edit" => return Some(SlashCommand::Edit),
+                _ => {}
+            }
+        }
+
         let input = input.trim();
         if !input.starts_with('/') {
             return None;
@@ -74,12 +85,23 @@ pub async fn handle_slash_command(
             Ok(HandleCommandResult::NoOp)
         }
         SlashCommand::Help => {
+            println!(
+                "{} {}",
+                "TIP:".green(),
+                "Some commands can be used without the leading '/'".dimmed()
+            );
             println!("{}", "Available commands:".green().bold());
             println!("  {} - Set system prompt", "/system <message>".yellow());
-            println!("  {} - Clear conversation history", "/reset".yellow());
-            println!("  {} - Show this help", "/help".yellow());
-            println!("  {} - Edit next message in $EDITOR", "/edit".yellow());
-            println!("  {} - Exit chat", "/quit or /exit".yellow());
+            println!(
+                "  {} - Clear conversation history",
+                "/reset (reset)".yellow()
+            );
+            println!("  {} - Show this help", "/help (help)".yellow());
+            println!(
+                "  {} - Edit next message in $EDITOR",
+                "/edit (edit)".yellow()
+            );
+            println!("  {} - Exit chat", "/quit or /exit (quit or exit)".yellow());
             Ok(HandleCommandResult::NoOp)
         }
         SlashCommand::Quit => Ok(HandleCommandResult::Quit),

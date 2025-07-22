@@ -22,10 +22,17 @@ pub async fn run_interactive_chat(
         "(Ctrl+C to exit)".dimmed()
     );
     println!(
-        "{} Type {} for available commands.\n",
+        "{} Type {} for available commands.",
         "Tip:".green(),
-        "/help".yellow()
+        "help".yellow()
     );
+    println!(
+        "{} Type {} or {} to exit.",
+        "Tip:".green(),
+        "exit".yellow(),
+        "quit".yellow()
+    );
+    println!("");
 
     let mut conversation = Vec::new();
     let mut line_editor = setup_reedline(config.config.vi_mode, &config.data_base_path)?;
