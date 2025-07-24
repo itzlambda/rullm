@@ -1,26 +1,24 @@
 use crate::config::ProviderConfig;
 use crate::error::LlmError;
-use crate::middleware::EnhancedHttpClient;
 use crate::types::{
     ChatCompletion, ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
     StreamConfig, StreamResult, TokenUsage,
 };
 use crate::utils::sse::sse_lines;
 use futures::StreamExt;
+use reqwest::Client;
 
 /// Anthropic provider for Claude models
 pub struct AnthropicProvider {
     config: crate::config::AnthropicConfig,
-    client: EnhancedHttpClient,
+    client: Client,
 }
 
 impl AnthropicProvider {
     /// Create a new AnthropicProvider
     pub fn new(config: crate::config::AnthropicConfig) -> Result<Self, LlmError> {
         config.validate()?;
-
-        let client = EnhancedHttpClient::new(&config)?;
-
+        let client = Client::new();
         Ok(Self { config, client })
     }
 
@@ -173,10 +171,11 @@ impl LlmProvider for AnthropicProvider {
     async fn available_models(&self) -> Result<Vec<String>, LlmError> {
         let url = format!("{}/v1/models", self.config.base_url().trim_end_matches('/'));
 
-        let resp = self
-            .client
-            .get_with_retry(&url, &self.config.headers())
-            .await?;
+        let mut req = self.client.get(&url);
+        for (key, value) in self.config.headers() {
+            req = req.header(&key, &value);
+        }
+        let resp = req.send().await?;
 
         if !resp.status().is_success() {
             return Err(LlmError::api(
@@ -256,10 +255,11 @@ impl LlmProvider for AnthropicProvider {
         // Use the models endpoint for health check - faster and no token usage
         let url = format!("{}/v1/models", self.config.base_url().trim_end_matches('/'));
 
-        let response = self
-            .client
-            .get_with_retry(&url, &self.config.headers())
-            .await?;
+        let mut req = self.client.get(&url);
+        for (key, value) in self.config.headers() {
+            req = req.header(&key, &value);
+        }
+        let response = req.send().await?;
 
         if response.status().is_success() {
             Ok(())
@@ -284,10 +284,11 @@ impl ChatCompletion for AnthropicProvider {
         let url = format!("{}/messages", self.config.base_url());
         let body = self.to_anthropic_request(&request, model);
 
-        let response = self
-            .client
-            .post_with_retry(&url, &self.config.headers(), body)
-            .await?;
+        let mut req = self.client.post(&url);
+        for (key, value) in self.config.headers() {
+            req = req.header(&key, &value);
+        }
+        let response = req.json(&body).send().await?;
 
         if !response.status().is_success() {
             let status = response.status().to_string();

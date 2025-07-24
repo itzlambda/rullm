@@ -1,18 +1,18 @@
 use crate::config::ProviderConfig;
 use crate::error::LlmError;
-use crate::middleware::EnhancedHttpClient;
 use crate::types::{
     ChatCompletion, ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
     StreamConfig, StreamResult, TokenUsage,
 };
 use crate::utils::sse::sse_lines;
 use futures::StreamExt;
+use reqwest::Client;
 use std::collections::HashMap;
 
 /// Google AI Provider implementation
 pub struct GoogleProvider {
     config: crate::config::GoogleAiConfig,
-    client: EnhancedHttpClient,
+    client: Client,
 }
 
 impl GoogleProvider {
@@ -20,9 +20,7 @@ impl GoogleProvider {
     pub fn new(config: crate::config::GoogleAiConfig) -> Result<Self, LlmError> {
         // Validate configuration first
         config.validate()?;
-
-        let client = EnhancedHttpClient::new(&config)?;
-
+        let client = Client::new();
         Ok(Self { config, client })
     }
 
@@ -228,10 +226,11 @@ impl LlmProvider for GoogleProvider {
             self.config.api_key()
         );
 
-        let resp = self
-            .client
-            .get_with_retry(&url, &self.config.headers())
-            .await?;
+        let mut req = self.client.get(&url);
+        for (key, value) in self.config.headers() {
+            req = req.header(&key, &value);
+        }
+        let resp = req.send().await?;
 
         if !resp.status().is_success() {
             return Err(LlmError::api(
@@ -290,10 +289,11 @@ impl LlmProvider for GoogleProvider {
             self.config.api_key()
         );
 
-        let response = self
-            .client
-            .get_with_retry(&url, &self.config.headers())
-            .await?;
+        let mut req = self.client.get(&url);
+        for (key, value) in self.config.headers() {
+            req = req.header(&key, &value);
+        }
+        let response = req.send().await?;
 
         let status = response.status();
         if status.is_success() {
@@ -337,10 +337,11 @@ impl ChatCompletion for GoogleProvider {
             self.config.api_key()
         );
 
-        let response = self
-            .client
-            .post_with_retry(&url, &self.config.headers(), google_request)
-            .await?;
+        let mut req = self.client.post(&url);
+        for (key, value) in self.config.headers() {
+            req = req.header(&key, &value);
+        }
+        let response = req.json(&google_request).send().await?;
 
         let status = response.status();
         let response_text = response
