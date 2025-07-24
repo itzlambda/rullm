@@ -69,15 +69,9 @@ fn format_alias_display(alias: &str, target: &str) -> String {
     format!("  {alias:<20} → {target}")
 }
 
-/// Load resolver with user aliases from config
-fn load_resolver_with_config(config_path: &Path) -> Result<AliasResolver> {
-    let config = UserAliasConfig::load_from_file(config_path)?;
-    Ok(AliasResolver::with_user_aliases(config.aliases))
-}
-
 /// List all available aliases
 async fn list_aliases(config_path: &Path, output_level: OutputLevel) -> Result<()> {
-    let resolver = load_resolver_with_config(config_path)?;
+    let resolver = AliasResolver::new(config_path);
     let aliases = resolver.list_aliases();
 
     if aliases.is_empty() {
@@ -125,7 +119,7 @@ async fn add_alias(
 
     // Load existing config and resolver
     let mut config = UserAliasConfig::load_from_file(config_path)?;
-    let resolver = load_resolver_with_config(config_path)?;
+    let resolver = AliasResolver::new(config_path);
 
     // Check if alias already exists in resolver
     let existing_aliases = resolver.list_aliases();
@@ -184,7 +178,7 @@ async fn remove_alias(config_path: &Path, alias: &str, output_level: OutputLevel
 
 /// Show detailed information about a specific alias
 async fn show_alias(config_path: &Path, alias: &str, output_level: OutputLevel) -> Result<()> {
-    let resolver = load_resolver_with_config(config_path)?;
+    let resolver = AliasResolver::new(config_path);
     let aliases = resolver.list_aliases();
     let config = UserAliasConfig::load_from_file(config_path)?;
 

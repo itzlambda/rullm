@@ -159,7 +159,7 @@ pub fn create_client(
 /// This is the promoted version of the create_client_from_model closure from lib.rs
 pub fn from_model(model_str: &str, cli: &Cli, cli_config: &CliConfig) -> Result<SimpleLlmClient> {
     // Use the global alias resolver for CLI functionality
-    let resolver = crate::aliases::get_global_alias_resolver();
+    let resolver = crate::aliases::get_global_alias_resolver(&cli_config.config_base_path);
     let resolver = resolver
         .read()
         .map_err(|_| anyhow::anyhow!("Failed to acquire read lock on global resolver"))?;
