@@ -42,7 +42,7 @@ owo-colors = "4.0"
 atty = "0.2"
 toml = "0.8"
 etcetera = "0.8"
-reedline = "0.35"
+reedline = "0.41.0"
 
 # Dev dependencies
 tokio-test = "0.4"
