@@ -121,7 +121,25 @@ pub async fn run_single_query(
 ) -> Result<(), LlmError> {
     if streaming {
         // Use token-by-token streaming for real-time output
-        if system_prompt.is_none() {
+        if let Some(system) = system_prompt {
+            // Fall back to non-streaming when system prompt is provided
+            let spinner = Spinner::new("Generating response");
+            spinner.start().await;
+
+            // Small delay to ensure spinner starts
+            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+            // A future enhancement could build a full ChatRequest with system + user messages.
+            match client.chat_with_system(system, query).await {
+                Ok(response) => {
+                    spinner.stop_and_replace(&format!("{response}\n"));
+                }
+                Err(e) => {
+                    spinner.stop_and_replace(&format!("Error: {e}\n"));
+                    return Err(e);
+                }
+            }
+        } else {
             // Show spinner while waiting for first token
             let spinner = Spinner::new("Generating response");
             spinner.start().await;
@@ -168,24 +186,6 @@ pub async fn run_single_query(
                     if first_token {
                         spinner.stop_and_replace("(No response received)\n");
                     }
-                }
-                Err(e) => {
-                    spinner.stop_and_replace(&format!("Error: {e}\n"));
-                    return Err(e);
-                }
-            }
-        } else {
-            // Fall back to non-streaming when system prompt is provided
-            let spinner = Spinner::new("Generating response");
-            spinner.start().await;
-
-            // Small delay to ensure spinner starts
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-
-            // A future enhancement could build a full ChatRequest with system + user messages.
-            match client.chat_with_system(system_prompt.unwrap(), query).await {
-                Ok(response) => {
-                    spinner.stop_and_replace(&format!("{response}\n"));
                 }
                 Err(e) => {
                     spinner.stop_and_replace(&format!("Error: {e}\n"));
