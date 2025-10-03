@@ -187,14 +187,14 @@ impl Models {
 
 pub fn model_completer(current: &OsStr) -> Vec<CompletionCandidate> {
     // Predefined providers or aliases
-    const PROVIDED: &[&str] = &["openai/", "anthropic/", "google/"];
+    const PROVIDED: &[&str] = &["openai:", "anthropic:", "google:"];
 
     let cli_config = CliConfig::load();
     let cur_str = current.to_string_lossy();
 
-    // If there is a slash already, offer all cached models that start with input
-    if cur_str.contains('/') {
-        if let Some((provider, _)) = cur_str.split_once('/') {
+    // If there is a colon already, offer all cached models that start with input
+    if cur_str.contains(':') {
+        if let Some((provider, _)) = cur_str.split_once(':') {
             // Load cached models
             if let Ok(Some(entries)) = load_models_cache(&cli_config) {
                 let mut v: Vec<CompletionCandidate> = entries
@@ -204,14 +204,14 @@ pub fn model_completer(current: &OsStr) -> Vec<CompletionCandidate> {
                     .map(|m| m.into())
                     .collect();
 
-                // Always offer the raw `provider/` prefix too.
-                v.push(format!("{provider}/").into());
+                // Always offer the raw `provider:` prefix too.
+                v.push(format!("{provider}:").into());
 
                 return v;
             }
         }
 
-        // No cache available, fallthrough to simple provider + '/'
+        // No cache available, fallthrough to simple provider + ':'
         return PROVIDED
             .iter()
             .filter(|p| p.starts_with(cur_str.as_ref()))
@@ -219,7 +219,7 @@ pub fn model_completer(current: &OsStr) -> Vec<CompletionCandidate> {
             .collect();
     }
 
-    // Only offer provider prefixes when '/' is not yet typed
+    // Only offer provider prefixes when ':' is not yet typed
     PROVIDED
         .iter()
         .filter(|p| p.starts_with(cur_str.as_ref()))

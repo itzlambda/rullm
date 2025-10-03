@@ -21,7 +21,7 @@ pub enum AliasAction {
     Add {
         /// Alias name (e.g., "my-fast-model")
         alias: String,
-        /// Target in provider/model format (e.g., "openai/gpt-4")
+        /// Target in provider:model format (e.g., "openai:gpt-4")
         target: String,
     },
     /// Remove a user alias
@@ -113,8 +113,8 @@ async fn add_alias(
         return Err(anyhow::anyhow!("Alias name cannot be empty"));
     }
 
-    if alias.contains('/') {
-        return Err(anyhow::anyhow!("Alias name cannot contain '/' character"));
+    if alias.contains(':') {
+        return Err(anyhow::anyhow!("Alias name cannot contain ':' character"));
     }
 
     // Load existing config and resolver

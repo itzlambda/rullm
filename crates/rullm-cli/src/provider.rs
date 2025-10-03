@@ -59,7 +59,7 @@ impl Provider {
 
     #[allow(dead_code)]
     pub fn from_model(input: &str) -> Result<(Provider, String), anyhow::Error> {
-        if let Some((provider_str, model)) = input.split_once('/') {
+        if let Some((provider_str, model)) = input.split_once(':') {
             let provider = Provider::from_alias(provider_str)
                 .ok_or_else(|| anyhow::anyhow!(format!("Unsupported provider: {provider_str}")))?;
 
@@ -70,7 +70,7 @@ impl Provider {
             Ok((provider, model.to_string()))
         } else {
             Err(anyhow::anyhow!(format!(
-                "Invalid model format '{input}'. Expected 'provider/model'"
+                "Invalid model format '{input}'. Expected 'provider:model'"
             )))
         }
     }

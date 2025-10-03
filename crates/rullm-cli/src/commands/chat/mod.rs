@@ -26,7 +26,7 @@ pub use prompt::ChatPrompt;
 
 #[derive(Args)]
 pub struct ChatArgs {
-    /// Model to use in format: provider/model-name (e.g., openai/gpt-4, gemini/gemini-pro, anthropic/claude-3-sonnet)
+    /// Model to use in format: provider:model-name (e.g., openai:gpt-4, gemini:gemini-pro, anthropic:claude-3-sonnet)
     #[arg(short, long, add = ArgValueCompleter::new(model_completer))]
     pub model: Option<String>,
 }

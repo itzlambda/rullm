@@ -25,7 +25,7 @@ pub fn resolve_model(
         .or_else(|| default_model.clone())
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Model is required. Use --model in format 'provider/model_name' (e.g., openai/gpt-4o) or set a default_model in config"
+                "Model is required. Use --model in format 'provider:model_name' (e.g., openai:gpt-4o) or set a default_model in config"
             )
         })
 }
@@ -44,7 +44,7 @@ pub fn resolve_direct_query_model(
         .or_else(|| default_model.clone())
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Model is required for direct queries. Use --model in format 'provider/model_name' (e.g., openai/gpt-4o) or set a default_model in config"
+                "Model is required for direct queries. Use --model in format 'provider:model_name' (e.g., openai:gpt-4o) or set a default_model in config"
             )
         })
 }

@@ -71,7 +71,7 @@ rullm models update
 
 # Manage aliases
 rullm alias list
-rullm alias add my-fast "openai/gpt-3.5-turbo"
+rullm alias add my-fast "openai:gpt-3.5-turbo"
 rullm alias show claude
 
 # API key management
@@ -114,7 +114,7 @@ user_prompt = "Please review this code: {{input}}"
 
 ### Model Aliases
 
-Model aliases are now user-defined. Use `rullm alias add <alias> <provider/model>` to create your own shortcuts. Use `rullm alias list` to see your aliases.
+Model aliases are now user-defined. Use `rullm alias add <alias> <provider:model>` to create your own shortcuts. Use `rullm alias list` to see your aliases.
 
 ## Shell Completion
 

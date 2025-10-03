@@ -10,7 +10,7 @@ use std::sync::{OnceLock, RwLock};
 /// User alias configuration that can be saved/loaded from file
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserAliasConfig {
-    /// User-defined aliases mapping alias -> provider/model
+    /// User-defined aliases mapping alias -> provider:model
     pub aliases: HashMap<String, String>,
 }
 
@@ -75,9 +75,9 @@ impl UserAliasConfig {
         self.aliases.remove(&alias.to_lowercase()).is_some()
     }
 
-    /// Validate that a target is in valid provider/model format
+    /// Validate that a target is in valid provider:model format
     fn validate_target(target: &str) -> Result<(), LlmError> {
-        if let Some((provider_str, model_name)) = target.split_once('/') {
+        if let Some((provider_str, model_name)) = target.split_once(':') {
             if Provider::from_alias(provider_str).is_none() {
                 return Err(LlmError::validation(format!(
                     "Invalid provider '{provider_str}' in target '{target}'"
@@ -91,14 +91,14 @@ impl UserAliasConfig {
             Ok(())
         } else {
             Err(LlmError::validation(format!(
-                "Target '{target}' must be in 'provider/model' format"
+                "Target '{target}' must be in 'provider:model' format"
             )))
         }
     }
 }
 
 /// Unified alias resolver that handles both default (built-in) and user-defined aliases.
-/// All aliases resolve to canonical `provider/model` format.
+/// All aliases resolve to canonical `provider:model` format.
 #[derive(Debug, Clone)]
 pub struct AliasResolver {
     /// User-defined aliases that override defaults
@@ -133,7 +133,7 @@ impl AliasResolver {
     /// Resolve an input string to canonical (Provider, model) format
     ///
     /// Resolution order:
-    /// 1. If already in provider/model format → validate and use
+    /// 1. If already in provider:model format → validate and use
     /// 2. Check user aliases (user overrides defaults)
     /// 3. Check default aliases
     /// 4. Try pattern inference
@@ -149,8 +149,8 @@ impl AliasResolver {
             input.to_string()
         };
 
-        // 1. Fast path: already in provider/model format
-        if let Some((provider_str, model_name)) = input.split_once('/') {
+        // 1. Fast path: already in provider:model format
+        if let Some((provider_str, model_name)) = input.split_once(':') {
             if let Some(provider) = Provider::from_alias(provider_str) {
                 return Ok((provider, model_name.to_string()));
             } else {
@@ -171,7 +171,7 @@ impl AliasResolver {
 
     /// Parse a target string to (Provider, model)
     fn parse_target(&self, target: &str) -> Result<(Provider, String), LlmError> {
-        if let Some((provider_str, model_name)) = target.split_once('/') {
+        if let Some((provider_str, model_name)) = target.split_once(':') {
             if let Some(provider) = Provider::from_alias(provider_str) {
                 Ok((provider, model_name.to_string()))
             } else {
@@ -181,7 +181,7 @@ impl AliasResolver {
             }
         } else {
             Err(LlmError::validation(format!(
-                "Invalid target format '{target}', expected 'provider/model'"
+                "Invalid target format '{target}', expected 'provider:model'"
             )))
         }
     }
@@ -191,7 +191,7 @@ impl AliasResolver {
         // Check if input is just a provider name (should error)
         if Provider::from_alias(input).is_some() {
             return Err(LlmError::validation(format!(
-                "Input '{input}' is a provider name, not a model. Use format 'provider/model' or a specific model alias."
+                "Input '{input}' is a provider name, not a model. Use format 'provider:model' or a specific model alias."
             )));
         }
 
@@ -210,7 +210,7 @@ impl AliasResolver {
         }
 
         Err(LlmError::validation(format!(
-            "Unable to determine provider for model: '{input}'. Use format 'provider/model' or a recognized alias."
+            "Unable to determine provider for model: '{input}'. Use format 'provider:model' or a recognized alias."
         )))
     }
 }

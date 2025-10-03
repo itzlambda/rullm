@@ -26,7 +26,7 @@ pub enum ModelsAction {
     List,
     /// Set a default model that will be used when --model is not supplied
     Default {
-        /// Model identifier in the form provider/model-name (e.g. openai/gpt-4o)
+        /// Model identifier in the form provider:model-name (e.g. openai:gpt-4o)
         model: Option<String>,
     },
     /// Fetch fresh models from all providers with available API keys and update local cache
@@ -74,7 +74,7 @@ impl ModelsArgs {
                 for provider in providers {
                     let provider = format!("{provider}");
                     // Try to create a client for this provider
-                    let model_hint = format!("{provider}/dummy"); // dummy model name, just to get the client
+                    let model_hint = format!("{provider}:dummy"); // dummy model name, just to get the client
                     let client = match client::from_model(&model_hint, cli, cli_config) {
                         Ok(c) => c,
                         Err(_) => {
@@ -265,13 +265,13 @@ fn cache_models(cli_config: &CliConfig, provider_name: &str, models: &[String]) 
     };
 
     // Remove all entries for this provider
-    let prefix = format!("{}/", provider_name.to_lowercase());
+    let prefix = format!("{}:", provider_name.to_lowercase());
     entries.retain(|m| !m.starts_with(&prefix));
 
     // Add new models for this provider
     let new_entries: Vec<String> = models
         .iter()
-        .map(|m| format!("{}/{}", provider_name.to_lowercase(), m))
+        .map(|m| format!("{}:{}", provider_name.to_lowercase(), m))
         .collect();
     entries.extend(new_entries);
 
