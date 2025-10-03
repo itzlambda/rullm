@@ -84,6 +84,8 @@ impl KeysArgs {
                 for provider in Provider::iter() {
                     let has_key = match provider {
                         Provider::OpenAI => api_keys.openai_api_key.is_some(),
+                        Provider::Groq => api_keys.groq_api_key.is_some(),
+                        Provider::OpenRouter => api_keys.openrouter_api_key.is_some(),
                         Provider::Anthropic => api_keys.anthropic_api_key.is_some(),
                         Provider::Google => api_keys.google_ai_api_key.is_some(),
                     };

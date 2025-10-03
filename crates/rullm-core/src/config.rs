@@ -157,9 +157,9 @@ impl ProviderConfig for HttpProviderConfig {
     }
 }
 
-/// OpenAI-specific configuration
+/// OpenAI-compatible configuration (supports OpenAI, Groq, OpenRouter, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenAIConfig {
+pub struct OpenAICompatibleConfig {
     pub api_key: String,
     pub organization: Option<String>,
     pub project: Option<String>,
@@ -169,13 +169,40 @@ pub struct OpenAIConfig {
     pub retry_policy: RetryPolicy,
 }
 
-impl OpenAIConfig {
+/// Type alias for backwards compatibility
+pub type OpenAIConfig = OpenAICompatibleConfig;
+
+impl OpenAICompatibleConfig {
     pub fn new(api_key: impl Into<String>) -> Self {
         Self {
             api_key: api_key.into(),
             organization: None,
             project: None,
             base_url: None,
+            timeout_seconds: 30,
+            max_retries: 3,
+            retry_policy: RetryPolicy::default(),
+        }
+    }
+
+    pub fn groq(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+            organization: None,
+            project: None,
+            base_url: Some("https://api.groq.com/openai/v1".to_string()),
+            timeout_seconds: 30,
+            max_retries: 3,
+            retry_policy: RetryPolicy::default(),
+        }
+    }
+
+    pub fn openrouter(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+            organization: None,
+            project: None,
+            base_url: Some("https://openrouter.ai/api/v1".to_string()),
             timeout_seconds: 30,
             max_retries: 3,
             retry_policy: RetryPolicy::default(),
@@ -254,7 +281,7 @@ impl OpenAIConfig {
     }
 }
 
-impl ProviderConfig for OpenAIConfig {
+impl ProviderConfig for OpenAICompatibleConfig {
     fn api_key(&self) -> &str {
         &self.api_key
     }
@@ -299,15 +326,12 @@ impl ProviderConfig for OpenAIConfig {
     fn validate(&self) -> Result<(), crate::error::LlmError> {
         if self.api_key.is_empty() {
             return Err(crate::error::LlmError::configuration(
-                "OpenAI API key is required",
+                "API key is required",
             ));
         }
 
-        if !self.api_key.starts_with("sk-") {
-            return Err(crate::error::LlmError::configuration(
-                "OpenAI API key must start with 'sk-'",
-            ));
-        }
+        // Relaxed validation: don't require 'sk-' prefix since Groq and OpenRouter use different formats
+        // OpenAI keys start with 'sk-', Groq uses 'gsk_', OpenRouter uses different format
 
         Ok(())
     }
@@ -502,6 +526,38 @@ impl ConfigBuilder {
         let mut config = GoogleAiConfig::new(api_key);
 
         if let Ok(base_url) = std::env::var("GOOGLE_AI_BASE_URL") {
+            config = config.with_base_url(base_url);
+        }
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Create Groq config from environment
+    pub fn groq_from_env() -> Result<OpenAICompatibleConfig, crate::error::LlmError> {
+        let api_key = std::env::var("GROQ_API_KEY").map_err(|_| {
+            crate::error::LlmError::configuration("GROQ_API_KEY environment variable not set")
+        })?;
+
+        let mut config = OpenAICompatibleConfig::groq(api_key);
+
+        if let Ok(base_url) = std::env::var("GROQ_BASE_URL") {
+            config = config.with_base_url(base_url);
+        }
+
+        config.validate()?;
+        Ok(config)
+    }
+
+    /// Create OpenRouter config from environment
+    pub fn openrouter_from_env() -> Result<OpenAICompatibleConfig, crate::error::LlmError> {
+        let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
+            crate::error::LlmError::configuration("OPENROUTER_API_KEY environment variable not set")
+        })?;
+
+        let mut config = OpenAICompatibleConfig::openrouter(api_key);
+
+        if let Ok(base_url) = std::env::var("OPENROUTER_BASE_URL") {
             config = config.with_base_url(base_url);
         }
 

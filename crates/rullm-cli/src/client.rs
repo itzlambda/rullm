@@ -5,7 +5,7 @@ use crate::constants;
 use anyhow::{Context, Result};
 
 use rullm_core::simple::{SimpleLlmBuilder, SimpleLlmClient, SimpleLlmConfig};
-use rullm_core::{AnthropicConfig, GoogleAiConfig, LlmError, OpenAIConfig};
+use rullm_core::{AnthropicConfig, GoogleAiConfig, LlmError, OpenAICompatibleConfig, OpenAIConfig};
 
 /// Generic helper to create provider configs with API key and optional base URL
 trait ProviderConfigBuilder<T> {
@@ -59,6 +59,50 @@ impl ProviderConfigBuilder<AnthropicConfig> for AnthropicConfigBuilder {
             .with_anthropic(config)
             .with_simple_config(simple_config)
             .build_anthropic()
+    }
+}
+
+struct GroqConfigBuilder;
+impl ProviderConfigBuilder<OpenAICompatibleConfig> for GroqConfigBuilder {
+    fn new_config(api_key: String) -> OpenAICompatibleConfig {
+        OpenAICompatibleConfig::groq(api_key)
+    }
+
+    fn with_base_url(config: OpenAICompatibleConfig, base_url: &str) -> OpenAICompatibleConfig {
+        config.with_base_url(base_url)
+    }
+
+    fn build_client(
+        builder: SimpleLlmBuilder,
+        config: OpenAICompatibleConfig,
+        simple_config: SimpleLlmConfig,
+    ) -> Result<SimpleLlmClient, LlmError> {
+        builder
+            .with_groq(config)
+            .with_simple_config(simple_config)
+            .build_groq()
+    }
+}
+
+struct OpenRouterConfigBuilder;
+impl ProviderConfigBuilder<OpenAICompatibleConfig> for OpenRouterConfigBuilder {
+    fn new_config(api_key: String) -> OpenAICompatibleConfig {
+        OpenAICompatibleConfig::openrouter(api_key)
+    }
+
+    fn with_base_url(config: OpenAICompatibleConfig, base_url: &str) -> OpenAICompatibleConfig {
+        config.with_base_url(base_url)
+    }
+
+    fn build_client(
+        builder: SimpleLlmBuilder,
+        config: OpenAICompatibleConfig,
+        simple_config: SimpleLlmConfig,
+    ) -> Result<SimpleLlmClient, LlmError> {
+        builder
+            .with_openrouter(config)
+            .with_simple_config(simple_config)
+            .build_openrouter()
     }
 }
 
@@ -132,12 +176,24 @@ pub fn create_client(
     // Set custom model if specified
     simple_config = match provider {
         Provider::OpenAI => simple_config.with_openai_model(model_name),
+        Provider::Groq => simple_config.with_groq_model(model_name),
+        Provider::OpenRouter => simple_config.with_openrouter_model(model_name),
         Provider::Anthropic => simple_config.with_anthropic_model(model_name),
         Provider::Google => simple_config.with_google_model(model_name),
     };
 
     match provider {
         Provider::OpenAI => create_provider_client::<OpenAIConfig, OpenAIConfigBuilder>(
+            api_key,
+            base_url,
+            simple_config,
+        ),
+        Provider::Groq => create_provider_client::<OpenAICompatibleConfig, GroqConfigBuilder>(
+            api_key,
+            base_url,
+            simple_config,
+        ),
+        Provider::OpenRouter => create_provider_client::<OpenAICompatibleConfig, OpenRouterConfigBuilder>(
             api_key,
             base_url,
             simple_config,

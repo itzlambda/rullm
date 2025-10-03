@@ -5,6 +5,8 @@ use strum_macros::EnumIter;
 #[derive(Clone, Debug, PartialEq, Eq, EnumIter)]
 pub enum Provider {
     OpenAI,
+    Groq,
+    OpenRouter,
     Anthropic,
     Google,
 }
@@ -13,6 +15,8 @@ impl std::fmt::Display for Provider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             Provider::OpenAI => "openai",
+            Provider::Groq => "groq",
+            Provider::OpenRouter => "openrouter",
             Provider::Anthropic => "anthropic",
             Provider::Google => "google",
         };
@@ -22,12 +26,14 @@ impl std::fmt::Display for Provider {
 
 impl ValueEnum for Provider {
     fn value_variants<'a>() -> &'a [Self] {
-        &[Self::OpenAI, Self::Anthropic, Self::Google]
+        &[Self::OpenAI, Self::Groq, Self::OpenRouter, Self::Anthropic, Self::Google]
     }
 
     fn to_possible_value(&self) -> Option<PossibleValue> {
         let value = match self {
             Self::OpenAI => PossibleValue::new("openai"),
+            Self::Groq => PossibleValue::new("groq"),
+            Self::OpenRouter => PossibleValue::new("openrouter"),
             Self::Anthropic => PossibleValue::new("anthropic"),
             Self::Google => PossibleValue::new("google"),
         };
@@ -39,6 +45,8 @@ impl Provider {
     pub fn aliases(&self) -> &'static [&'static str] {
         match self {
             Provider::OpenAI => &["openai", "gpt"],
+            Provider::Groq => &["groq"],
+            Provider::OpenRouter => &["openrouter"],
             Provider::Anthropic => &["anthropic", "claude"],
             Provider::Google => &["google", "gemini"],
         }
@@ -70,6 +78,8 @@ impl Provider {
     pub fn env_key(&self) -> &'static str {
         match self {
             Provider::OpenAI => "OPENAI_API_KEY",
+            Provider::Groq => "GROQ_API_KEY",
+            Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
             Provider::Google => "GOOGLE_AI_API_KEY",
         }

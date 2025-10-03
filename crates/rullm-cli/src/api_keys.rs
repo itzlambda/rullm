@@ -6,6 +6,8 @@ use std::path::Path;
 #[derive(Default, Deserialize, Serialize, Debug, Clone)]
 pub struct ApiKeys {
     pub openai_api_key: Option<String>,
+    pub groq_api_key: Option<String>,
+    pub openrouter_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub google_ai_api_key: Option<String>,
 }
@@ -53,6 +55,8 @@ impl ApiKeys {
     pub fn get_api_key(provider: &Provider, api_keys: &ApiKeys) -> Option<String> {
         let key = match provider {
             Provider::OpenAI => api_keys.openai_api_key.as_ref(),
+            Provider::Groq => api_keys.groq_api_key.as_ref(),
+            Provider::OpenRouter => api_keys.openrouter_api_key.as_ref(),
             Provider::Anthropic => api_keys.anthropic_api_key.as_ref(),
             Provider::Google => api_keys.google_ai_api_key.as_ref(),
         };
@@ -64,6 +68,8 @@ impl ApiKeys {
     pub fn set_api_key_for_provider(provider: &Provider, api_keys: &mut ApiKeys, key: &str) {
         match provider {
             Provider::OpenAI => api_keys.openai_api_key = Some(key.to_string()),
+            Provider::Groq => api_keys.groq_api_key = Some(key.to_string()),
+            Provider::OpenRouter => api_keys.openrouter_api_key = Some(key.to_string()),
             Provider::Anthropic => api_keys.anthropic_api_key = Some(key.to_string()),
             Provider::Google => api_keys.google_ai_api_key = Some(key.to_string()),
         }
@@ -72,6 +78,8 @@ impl ApiKeys {
     pub fn delete_api_key_for_provider(provider: &Provider, api_keys: &mut ApiKeys) {
         match provider {
             Provider::OpenAI => api_keys.openai_api_key = None,
+            Provider::Groq => api_keys.groq_api_key = None,
+            Provider::OpenRouter => api_keys.openrouter_api_key = None,
             Provider::Anthropic => api_keys.anthropic_api_key = None,
             Provider::Google => api_keys.google_ai_api_key = None,
         }

@@ -153,10 +153,10 @@ pub mod utils;
 #[cfg(test)]
 mod tests;
 
-pub use config::{AnthropicConfig, ConfigBuilder, GoogleAiConfig, OpenAIConfig, ProviderConfig};
+pub use config::{AnthropicConfig, ConfigBuilder, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig, ProviderConfig};
 pub use error::LlmError;
 pub use middleware::{LlmServiceBuilder, MiddlewareConfig, MiddlewareStack, RateLimit};
-pub use providers::{AnthropicProvider, GoogleProvider, OpenAIProvider};
+pub use providers::{AnthropicProvider, GoogleProvider, GroqProvider, OpenAIProvider, OpenRouterProvider};
 pub use simple::{DefaultModels, SimpleLlm, SimpleLlmBuilder, SimpleLlmClient, SimpleLlmConfig};
 pub use types::{
     ChatCompletion, ChatMessage, ChatRequest, ChatRequestBuilder, ChatResponse, ChatRole,

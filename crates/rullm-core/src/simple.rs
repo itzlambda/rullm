@@ -3,9 +3,9 @@
 //! This module provides a simplified async interface that abstracts away
 //! the complexity of Tower and provides easy-to-use methods for basic users.
 
-use crate::config::{AnthropicConfig, GoogleAiConfig, OpenAIConfig};
+use crate::config::{AnthropicConfig, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig};
 use crate::error::LlmError;
-use crate::providers::{AnthropicProvider, GoogleProvider, OpenAIProvider};
+use crate::providers::{AnthropicProvider, GoogleProvider, GroqProvider, OpenAIProvider, OpenRouterProvider};
 use crate::types::{
     ChatCompletion, ChatMessage, ChatRequest, ChatRole, ChatStreamEvent, LlmProvider,
 };
@@ -38,6 +38,10 @@ pub struct SimpleLlmConfig {
 pub struct DefaultModels {
     /// Default OpenAI model
     pub openai: String,
+    /// Default Groq model
+    pub groq: String,
+    /// Default OpenRouter model
+    pub openrouter: String,
     /// Default Anthropic model
     pub anthropic: String,
     /// Default Google model
@@ -48,6 +52,8 @@ impl Default for DefaultModels {
     fn default() -> Self {
         Self {
             openai: "gpt-3.5-turbo".to_string(),
+            groq: "llama-3.3-70b-versatile".to_string(),
+            openrouter: "openai/gpt-3.5-turbo".to_string(),
             anthropic: "claude-3-haiku-20240307".to_string(),
             google: "gemini-pro".to_string(),
         }
@@ -83,6 +89,18 @@ impl SimpleLlmConfig {
     /// Set the default Anthropic model
     pub fn with_anthropic_model(mut self, model: impl Into<String>) -> Self {
         self.default_models.anthropic = model.into();
+        self
+    }
+
+    /// Set the default Groq model
+    pub fn with_groq_model(mut self, model: impl Into<String>) -> Self {
+        self.default_models.groq = model.into();
+        self
+    }
+
+    /// Set the default OpenRouter model
+    pub fn with_openrouter_model(mut self, model: impl Into<String>) -> Self {
+        self.default_models.openrouter = model.into();
         self
     }
 
@@ -218,6 +236,14 @@ pub enum SimpleLlmClient {
         provider: OpenAIProvider,
         config: SimpleLlmConfig,
     },
+    Groq {
+        provider: GroqProvider,
+        config: SimpleLlmConfig,
+    },
+    OpenRouter {
+        provider: OpenRouterProvider,
+        config: SimpleLlmConfig,
+    },
     Anthropic {
         provider: AnthropicProvider,
         config: SimpleLlmConfig,
@@ -233,6 +259,8 @@ impl SimpleLlmClient {
     fn validate_chat_input(&self, total_length: usize, is_any_empty: bool) -> Result<(), LlmError> {
         let config = match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => config,
         };
@@ -252,6 +280,8 @@ impl SimpleLlmClient {
     fn validate_request(&self, request: &ChatRequest) -> Result<(), LlmError> {
         let config = match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => config,
         };
@@ -290,6 +320,8 @@ impl SimpleLlmClient {
 
         let config = match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => config,
         };
@@ -344,6 +376,16 @@ impl SimpleLlmClient {
                     .chat_completion(request, &config.default_models.openai)
                     .await?
             }
+            SimpleLlmClient::Groq { provider, config } => {
+                provider
+                    .chat_completion(request, &config.default_models.groq)
+                    .await?
+            }
+            SimpleLlmClient::OpenRouter { provider, config } => {
+                provider
+                    .chat_completion(request, &config.default_models.openrouter)
+                    .await?
+            }
             SimpleLlmClient::Anthropic { provider, config } => {
                 provider
                     .chat_completion(request, &config.default_models.anthropic)
@@ -363,6 +405,8 @@ impl SimpleLlmClient {
     fn build_base_chat_request(&self, messages: Vec<ChatMessage>) -> ChatRequest {
         let config = match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => config,
         };
@@ -381,6 +425,8 @@ impl SimpleLlmClient {
     fn build_stream_chat_request(&self, messages: Vec<ChatMessage>) -> ChatRequest {
         let config = match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => config,
         };
@@ -401,6 +447,16 @@ impl SimpleLlmClient {
             SimpleLlmClient::OpenAI { provider, config } => {
                 provider
                     .chat_completion_stream(request, &config.default_models.openai, None)
+                    .await
+            }
+            SimpleLlmClient::Groq { provider, config } => {
+                provider
+                    .chat_completion_stream(request, &config.default_models.groq, None)
+                    .await
+            }
+            SimpleLlmClient::OpenRouter { provider, config } => {
+                provider
+                    .chat_completion_stream(request, &config.default_models.openrouter, None)
                     .await
             }
             SimpleLlmClient::Anthropic { provider, config } => {
@@ -483,6 +539,16 @@ impl SimpleLlm for SimpleLlmClient {
                     .chat_completion_stream(request, &config.default_models.openai, None)
                     .await
             }
+            SimpleLlmClient::Groq { provider, config } => {
+                provider
+                    .chat_completion_stream(request, &config.default_models.groq, None)
+                    .await
+            }
+            SimpleLlmClient::OpenRouter { provider, config } => {
+                provider
+                    .chat_completion_stream(request, &config.default_models.openrouter, None)
+                    .await
+            }
             SimpleLlmClient::Anthropic { provider, config } => {
                 provider
                     .chat_completion_stream(request, &config.default_models.anthropic, None)
@@ -523,6 +589,8 @@ impl SimpleLlm for SimpleLlmClient {
         // Input validation if enabled
         match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => {
                 if config.validate_inputs {
@@ -546,6 +614,8 @@ impl SimpleLlm for SimpleLlmClient {
 
         let request = match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => ChatRequest {
                 messages: chat_messages,
@@ -561,6 +631,16 @@ impl SimpleLlm for SimpleLlmClient {
             SimpleLlmClient::OpenAI { provider, config } => {
                 provider
                     .chat_completion(request, &config.default_models.openai)
+                    .await?
+            }
+            SimpleLlmClient::Groq { provider, config } => {
+                provider
+                    .chat_completion(request, &config.default_models.groq)
+                    .await?
+            }
+            SimpleLlmClient::OpenRouter { provider, config } => {
+                provider
+                    .chat_completion(request, &config.default_models.openrouter)
                     .await?
             }
             SimpleLlmClient::Anthropic { provider, config } => {
@@ -597,6 +677,14 @@ impl SimpleLlm for SimpleLlmClient {
                     })
                     .collect::<Vec<_>>()
             }
+            SimpleLlmClient::Groq { provider, .. } => {
+                // Groq provides chat models, no filtering needed for now
+                provider.available_models().await?
+            }
+            SimpleLlmClient::OpenRouter { provider, .. } => {
+                // OpenRouter aggregates models, return all
+                provider.available_models().await?
+            }
             SimpleLlmClient::Anthropic { provider, .. } => {
                 let models = provider.available_models().await?;
                 models
@@ -621,6 +709,8 @@ impl SimpleLlm for SimpleLlmClient {
     async fn health_check(&self) -> Result<(), LlmError> {
         match self {
             SimpleLlmClient::OpenAI { provider, .. } => provider.health_check().await,
+            SimpleLlmClient::Groq { provider, .. } => provider.health_check().await,
+            SimpleLlmClient::OpenRouter { provider, .. } => provider.health_check().await,
             SimpleLlmClient::Anthropic { provider, .. } => provider.health_check().await,
             SimpleLlmClient::Google { provider, .. } => provider.health_check().await,
         }
@@ -629,6 +719,8 @@ impl SimpleLlm for SimpleLlmClient {
     fn provider_name(&self) -> &'static str {
         match self {
             SimpleLlmClient::OpenAI { provider, .. } => provider.name(),
+            SimpleLlmClient::Groq { provider, .. } => provider.name(),
+            SimpleLlmClient::OpenRouter { provider, .. } => provider.name(),
             SimpleLlmClient::Anthropic { provider, .. } => provider.name(),
             SimpleLlmClient::Google { provider, .. } => provider.name(),
         }
@@ -639,6 +731,8 @@ impl SimpleLlm for SimpleLlmClient {
 #[derive(Default)]
 pub struct SimpleLlmBuilder {
     openai_config: Option<OpenAIConfig>,
+    groq_config: Option<OpenAICompatibleConfig>,
+    openrouter_config: Option<OpenAICompatibleConfig>,
     anthropic_config: Option<AnthropicConfig>,
     google_config: Option<GoogleAiConfig>,
     simple_config: SimpleLlmConfig,
@@ -649,6 +743,8 @@ impl SimpleLlmBuilder {
     pub fn new() -> Self {
         Self {
             openai_config: None,
+            groq_config: None,
+            openrouter_config: None,
             anthropic_config: None,
             google_config: None,
             simple_config: SimpleLlmConfig::default(),
@@ -658,6 +754,18 @@ impl SimpleLlmBuilder {
     /// Add OpenAI configuration
     pub fn with_openai(mut self, config: OpenAIConfig) -> Self {
         self.openai_config = Some(config);
+        self
+    }
+
+    /// Add Groq configuration
+    pub fn with_groq(mut self, config: OpenAICompatibleConfig) -> Self {
+        self.groq_config = Some(config);
+        self
+    }
+
+    /// Add OpenRouter configuration
+    pub fn with_openrouter(mut self, config: OpenAICompatibleConfig) -> Self {
+        self.openrouter_config = Some(config);
         self
     }
 
@@ -688,6 +796,34 @@ impl SimpleLlmBuilder {
         self.simple_config.validate()?;
         let provider = OpenAIProvider::new(config)?;
         Ok(SimpleLlmClient::OpenAI {
+            provider,
+            config: self.simple_config,
+        })
+    }
+
+    /// Build a Groq client
+    pub fn build_groq(self) -> Result<SimpleLlmClient, LlmError> {
+        let config = self
+            .groq_config
+            .ok_or_else(|| LlmError::configuration("Groq configuration not found"))?;
+
+        self.simple_config.validate()?;
+        let provider = GroqProvider::new(config)?;
+        Ok(SimpleLlmClient::Groq {
+            provider,
+            config: self.simple_config,
+        })
+    }
+
+    /// Build an OpenRouter client
+    pub fn build_openrouter(self) -> Result<SimpleLlmClient, LlmError> {
+        let config = self
+            .openrouter_config
+            .ok_or_else(|| LlmError::configuration("OpenRouter configuration not found"))?;
+
+        self.simple_config.validate()?;
+        let provider = OpenRouterProvider::new(config)?;
+        Ok(SimpleLlmClient::OpenRouter {
             provider,
             config: self.simple_config,
         })
@@ -729,6 +865,26 @@ impl SimpleLlmClient {
         let config = OpenAIConfig::new(api_key);
         let provider = OpenAIProvider::new(config)?;
         Ok(SimpleLlmClient::OpenAI {
+            provider,
+            config: SimpleLlmConfig::default(),
+        })
+    }
+
+    /// Create a simple Groq client with API key
+    pub fn groq(api_key: impl Into<String>) -> Result<Self, LlmError> {
+        let config = OpenAICompatibleConfig::groq(api_key);
+        let provider = GroqProvider::new(config)?;
+        Ok(SimpleLlmClient::Groq {
+            provider,
+            config: SimpleLlmConfig::default(),
+        })
+    }
+
+    /// Create a simple OpenRouter client with API key
+    pub fn openrouter(api_key: impl Into<String>) -> Result<Self, LlmError> {
+        let config = OpenAICompatibleConfig::openrouter(api_key);
+        let provider = OpenRouterProvider::new(config)?;
+        Ok(SimpleLlmClient::OpenRouter {
             provider,
             config: SimpleLlmConfig::default(),
         })
@@ -800,6 +956,8 @@ impl SimpleLlmClient {
     pub fn simple_config(&self) -> &SimpleLlmConfig {
         match self {
             SimpleLlmClient::OpenAI { config, .. }
+            | SimpleLlmClient::Groq { config, .. }
+            | SimpleLlmClient::OpenRouter { config, .. }
             | SimpleLlmClient::Anthropic { config, .. }
             | SimpleLlmClient::Google { config, .. } => config,
         }
@@ -809,6 +967,8 @@ impl SimpleLlmClient {
     pub fn model_name(&self) -> &str {
         match self {
             SimpleLlmClient::OpenAI { config, .. } => &config.default_models.openai,
+            SimpleLlmClient::Groq { config, .. } => &config.default_models.groq,
+            SimpleLlmClient::OpenRouter { config, .. } => &config.default_models.openrouter,
             SimpleLlmClient::Anthropic { config, .. } => &config.default_models.anthropic,
             SimpleLlmClient::Google { config, .. } => &config.default_models.google,
         }

@@ -12,7 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture
 
 ### Core Library (rullm-core)
-- **Providers**: Modular provider system supporting OpenAI, Anthropic, and Google AI APIs
+- **Providers**: Modular provider system supporting OpenAI, Groq, OpenRouter, Anthropic, and Google AI APIs
+  - OpenAI-compatible providers (OpenAI, Groq, OpenRouter) share implementation via `OpenAICompatibleProvider`
+  - Easily extensible to support any OpenAI-compatible API by adding a `ProviderIdentity`
 - **Middleware**: Built on Tower for retry logic, rate limiting, circuit breakers, and timeouts
 - **Dual APIs**: Simple string-based API and advanced API with full control over parameters
 - **Streaming**: Real-time token-by-token streaming support via async streams
@@ -56,6 +58,8 @@ cargo test --test integration
 ```bash
 # Core library examples (require API keys)
 cargo run --example openai_simple
+cargo run --example groq_simple
+cargo run --example openrouter_simple
 cargo run --example anthropic_stream
 cargo run --example gemini_stream
 cargo run --example test_all_providers
@@ -63,6 +67,7 @@ cargo run --example test_all_providers
 # CLI binary
 cargo run -- "What is Rust?"
 cargo run -- chat --model claude
+cargo run -- chat --model groq/llama-3.3-70b-versatile
 ```
 
 ### Linting and Formatting
@@ -85,7 +90,9 @@ cargo clippy --all-targets --all-features
 ### Provider Implementation
 - All providers implement the `ChatProvider` trait with `chat_completion` and `chat_completion_stream` methods
 - Configuration structs follow the pattern `{Provider}Config` (e.g., `OpenAIConfig`, `AnthropicConfig`)
-- Provider structs follow the pattern `{Provider}Provider` (e.g., `OpenAIProvider`, `AnthropicProvider`)
+  - OpenAI-compatible providers use `OpenAICompatibleConfig` with factory methods (`.groq()`, `.openrouter()`)
+- Provider structs follow the pattern `{Provider}Provider` (e.g., `OpenAIProvider`, `GroqProvider`, `OpenRouterProvider`)
+  - OpenAI-compatible providers wrap `OpenAICompatibleProvider` with different `ProviderIdentity` metadata
 
 ### Error Handling
 - All public APIs return `Result<T, LlmError>` for comprehensive error handling
@@ -108,6 +115,9 @@ cargo clippy --all-targets --all-features
 - `crates/rullm-core/src/lib.rs` - Main library entry point and public API
 - `crates/rullm-core/src/types.rs` - Core type definitions for requests/responses
 - `crates/rullm-core/src/providers/` - LLM provider implementations
+  - `openai_compatible.rs` - Shared implementation for OpenAI-compatible APIs (OpenAI, Groq, OpenRouter)
+  - `openai.rs`, `groq.rs`, `openrouter.rs` - Provider wrappers with specific identities
+  - `anthropic.rs`, `google.rs` - Provider-specific implementations
 - `crates/rullm-cli/src/main.rs` - CLI entry point and argument parsing
 - `crates/rullm-cli/src/commands/` - CLI command implementations
 - `crates/rullm-cli/src/config.rs` - Configuration management
