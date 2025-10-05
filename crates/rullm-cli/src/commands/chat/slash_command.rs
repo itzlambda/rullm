@@ -6,7 +6,7 @@ use rullm_core::types::ChatRole;
 #[derive(Debug, Clone)]
 pub enum SlashCommand {
     System(String),
-    Reset,
+    Clear,
     Help,
     Quit,
     Edit,
@@ -20,7 +20,7 @@ impl SlashCommand {
             match input.to_lowercase().as_str() {
                 "quit" | "exit" => return Some(SlashCommand::Quit),
                 "help" => return Some(SlashCommand::Help),
-                "reset" => return Some(SlashCommand::Reset),
+                "clear" => return Some(SlashCommand::Clear),
                 "edit" => return Some(SlashCommand::Edit),
                 _ => {}
             }
@@ -42,7 +42,7 @@ impl SlashCommand {
                     SlashCommand::System(String::new())
                 }
             }
-            "reset" => SlashCommand::Reset,
+            "clear" => SlashCommand::Clear,
             "help" => SlashCommand::Help,
             "quit" | "exit" => SlashCommand::Quit,
             "edit" => SlashCommand::Edit,
@@ -79,9 +79,9 @@ pub async fn handle_slash_command(
             );
             Ok(HandleCommandResult::NoOp)
         }
-        SlashCommand::Reset => {
+        SlashCommand::Clear => {
             conversation.clear();
-            println!("{}", "Conversation reset.".green());
+            println!("{}", "Conversation cleared.".green());
             Ok(HandleCommandResult::NoOp)
         }
         SlashCommand::Help => {
@@ -94,7 +94,7 @@ pub async fn handle_slash_command(
             println!("  {} - Set system prompt", "/system <message>".yellow());
             println!(
                 "  {} - Clear conversation history",
-                "/reset (reset)".yellow()
+                "/clear (clear)".yellow()
             );
             println!("  {} - Show this help", "/help (help)".yellow());
             println!(

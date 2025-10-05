@@ -10,7 +10,7 @@ impl SlashCommandCompleter {
         Self {
             commands: vec![
                 "/system".to_string(),
-                "/reset".to_string(),
+                "/clear".to_string(),
                 "/help".to_string(),
                 "/quit".to_string(),
                 "/exit".to_string(),
@@ -36,7 +36,7 @@ impl Completer for SlashCommandCompleter {
                 value: cmd.clone(),
                 description: match cmd.as_str() {
                     "/system" => Some("Set system prompt".to_string()),
-                    "/reset" => Some("Clear conversation history".to_string()),
+                    "/clear" => Some("Clear conversation history".to_string()),
                     "/help" => Some("Show available commands".to_string()),
                     "/quit" => Some("Exit chat".to_string()),
                     "/exit" => Some("Exit chat".to_string()),
