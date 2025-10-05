@@ -40,7 +40,7 @@ All streaming examples use the `chat_completion_stream` method which returns a `
 
 **Environment:** Requires `OPENAI_API_KEY`
 
-Demonstrates comprehensive OpenAI streaming with:
+Demonstrates OpenAI streaming with:
 - **Simple streaming chat** with real-time token display
 - **Multi-turn conversations** with context preservation  
 - **Creative writing** with high temperature settings
@@ -87,7 +87,7 @@ while let Some(event) = stream.next().await {
 
 **Environment:** Requires `ANTHROPIC_API_KEY`
 
-Showcases Claude's capabilities with:
+Shows Claude streaming with:
 - **Philosophical conversations** demonstrating reasoning abilities
 - **Creative storytelling** with vivid imagery
 - **Code explanation** with technical accuracy
@@ -124,7 +124,7 @@ let mut stream = provider
 
 **Environment:** Requires `GOOGLE_API_KEY`
 
-Highlights Gemini's versatility:
+Shows Gemini streaming with:
 - **Technical explanations** with precision
 - **Creative writing** using experimental models
 - **Code analysis** and review capabilities
@@ -265,7 +265,7 @@ Demonstrates:
 
 Key features:
 - **Environment-based configuration**
-- **Custom endpoints** for enterprise setups
+- **Custom endpoints** for custom API URLs
 - **Validation and error handling**
 - **Health checks** and model availability
 - **Request builder patterns** from minimal to full-featured
@@ -434,7 +434,7 @@ cargo run --example test_all_providers
 🎉 All providers are working correctly!
 ```
 
-This example is perfect for:
+Use this example for:
 - Verifying your API keys work
 - Testing network connectivity
 - Validating provider implementations

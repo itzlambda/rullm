@@ -29,8 +29,6 @@ pub struct SimpleLlmConfig {
     pub default_top_p: Option<f32>,
     /// Request timeout
     pub timeout: Duration,
-    /// Maximum number of retry attempts
-    pub max_retries: u32,
     /// Whether to validate inputs before sending requests
     pub validate_inputs: bool,
 }
@@ -70,7 +68,6 @@ impl Default for SimpleLlmConfig {
             default_max_tokens: None,
             default_top_p: None,
             timeout: Duration::from_secs(30),
-            max_retries: 3,
             validate_inputs: true,
         }
     }
@@ -133,12 +130,6 @@ impl SimpleLlmConfig {
     /// Set the request timeout
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
-        self
-    }
-
-    /// Set the maximum retry attempts
-    pub fn with_max_retries(mut self, max_retries: u32) -> Self {
-        self.max_retries = max_retries;
         self
     }
 
@@ -995,7 +986,6 @@ mod tests {
     fn test_simple_llm_config_default() {
         let config = SimpleLlmConfig::default();
         assert_eq!(config.timeout, Duration::from_secs(30));
-        assert_eq!(config.max_retries, 3);
         assert!(config.validate_inputs);
         assert_eq!(config.default_models.openai, "gpt-3.5-turbo");
     }
@@ -1007,7 +997,6 @@ mod tests {
             .with_max_tokens(2000)
             .with_top_p(0.9)
             .with_timeout(Duration::from_secs(60))
-            .with_max_retries(5)
             .with_validation(false)
             .with_openai_model("gpt-4")
             .with_anthropic_model("claude-3-sonnet-20240229")
@@ -1017,7 +1006,6 @@ mod tests {
         assert_eq!(config.default_max_tokens, Some(2000));
         assert_eq!(config.default_top_p, Some(0.9));
         assert_eq!(config.timeout, Duration::from_secs(60));
-        assert_eq!(config.max_retries, 5);
         assert!(!config.validate_inputs);
         assert_eq!(config.default_models.openai, "gpt-4");
         assert_eq!(config.default_models.anthropic, "claude-3-sonnet-20240229");

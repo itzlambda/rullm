@@ -183,8 +183,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n\n🎯 Tips for using Anthropic Claude streaming:");
     println!("• Set ANTHROPIC_API_KEY environment variable");
     println!("• Use .stream(true) in ChatRequestBuilder");
-    println!("• Claude models: haiku (fast), sonnet (balanced), opus (powerful)");
-    println!("• Claude excels at reasoning, analysis, and creative writing");
+    println!("• Claude models: haiku (fast), sonnet (balanced), opus (largest)");
+    println!("• Claude supports reasoning, analysis, and creative writing");
     println!("• Lower temperature (0.1-0.4) for factual content");
     println!("• Higher temperature (0.7-1.0) for creative content");
 

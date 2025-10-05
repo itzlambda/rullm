@@ -1,49 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-/// Retry policy configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RetryPolicy {
-    /// Fixed delay between retries
-    Fixed { delay_ms: u64 },
-    /// Exponential backoff with optional jitter
-    ExponentialBackoff {
-        initial_delay_ms: u64,
-        max_delay_ms: u64,
-        multiplier: f64,
-        jitter: bool,
-    },
-    /// Respect API-provided retry timing from response headers, with fallback policy
-    ApiGuided {
-        /// Fallback policy when no API guidance is available
-        fallback: Box<RetryPolicy>,
-        /// Maximum time to wait based on API guidance (prevents indefinite waits)
-        max_api_delay_ms: u64,
-        /// Headers to check for retry timing (in order of preference)
-        retry_headers: Vec<String>,
-    },
-}
-
-impl Default for RetryPolicy {
-    fn default() -> Self {
-        RetryPolicy::ApiGuided {
-            fallback: Box::new(RetryPolicy::ExponentialBackoff {
-                initial_delay_ms: 1000,
-                max_delay_ms: 30000,
-                multiplier: 2.0,
-                jitter: true,
-            }),
-            max_api_delay_ms: 60000, // Max 1 minute wait from API guidance
-            retry_headers: vec![
-                "retry-after".to_string(),
-                "x-ratelimit-reset".to_string(),
-                "x-ratelimit-reset-after".to_string(),
-                "reset-time".to_string(),
-            ],
-        }
-    }
-}
+use std::time::Duration;
 
 /// Configuration trait for LLM providers
 pub trait ProviderConfig: Send + Sync {
@@ -59,12 +16,6 @@ pub trait ProviderConfig: Send + Sync {
     /// Get any additional headers required by the provider
     fn headers(&self) -> HashMap<String, String>;
 
-    /// Get maximum number of retry attempts
-    fn max_retries(&self) -> u32;
-
-    /// Get retry policy configuration
-    fn retry_policy(&self) -> RetryPolicy;
-
     /// Validate the configuration
     fn validate(&self) -> Result<(), crate::error::LlmError>;
 }
@@ -76,8 +27,6 @@ pub struct HttpProviderConfig {
     pub base_url: String,
     pub timeout_seconds: u64,
     pub headers: HashMap<String, String>,
-    pub max_retries: u32,
-    pub retry_delay_ms: u64,
 }
 
 impl HttpProviderConfig {
@@ -87,8 +36,6 @@ impl HttpProviderConfig {
             base_url: base_url.into(),
             timeout_seconds: 30,
             headers: HashMap::new(),
-            max_retries: 3,
-            retry_delay_ms: 1000,
         }
     }
 
@@ -99,12 +46,6 @@ impl HttpProviderConfig {
 
     pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(key.into(), value.into());
-        self
-    }
-
-    pub fn with_retries(mut self, max_retries: u32, delay_ms: u64) -> Self {
-        self.max_retries = max_retries;
-        self.retry_delay_ms = delay_ms;
         self
     }
 }
@@ -124,16 +65,6 @@ impl ProviderConfig for HttpProviderConfig {
 
     fn headers(&self) -> HashMap<String, String> {
         self.headers.clone()
-    }
-
-    fn max_retries(&self) -> u32 {
-        self.max_retries
-    }
-
-    fn retry_policy(&self) -> RetryPolicy {
-        RetryPolicy::Fixed {
-            delay_ms: self.retry_delay_ms,
-        }
     }
 
     fn validate(&self) -> Result<(), crate::error::LlmError> {
@@ -165,8 +96,6 @@ pub struct OpenAICompatibleConfig {
     pub project: Option<String>,
     pub base_url: Option<String>,
     pub timeout_seconds: u64,
-    pub max_retries: u32,
-    pub retry_policy: RetryPolicy,
 }
 
 /// Type alias for backwards compatibility
@@ -180,8 +109,6 @@ impl OpenAICompatibleConfig {
             project: None,
             base_url: None,
             timeout_seconds: 30,
-            max_retries: 3,
-            retry_policy: RetryPolicy::default(),
         }
     }
 
@@ -192,8 +119,6 @@ impl OpenAICompatibleConfig {
             project: None,
             base_url: Some("https://api.groq.com/openai/v1".to_string()),
             timeout_seconds: 30,
-            max_retries: 3,
-            retry_policy: RetryPolicy::default(),
         }
     }
 
@@ -204,8 +129,6 @@ impl OpenAICompatibleConfig {
             project: None,
             base_url: Some("https://openrouter.ai/api/v1".to_string()),
             timeout_seconds: 30,
-            max_retries: 3,
-            retry_policy: RetryPolicy::default(),
         }
     }
 
@@ -221,62 +144,6 @@ impl OpenAICompatibleConfig {
 
     pub fn with_base_url(mut self, base_url: impl Into<String>) -> Self {
         self.base_url = Some(base_url.into());
-        self
-    }
-
-    pub fn with_retry_policy(mut self, retry_policy: RetryPolicy) -> Self {
-        self.retry_policy = retry_policy;
-        self
-    }
-
-    pub fn with_fixed_retry(mut self, max_retries: u32, delay_ms: u64) -> Self {
-        self.max_retries = max_retries;
-        self.retry_policy = RetryPolicy::Fixed { delay_ms };
-        self
-    }
-
-    pub fn with_exponential_backoff(
-        mut self,
-        max_retries: u32,
-        initial_delay_ms: u64,
-        max_delay_ms: u64,
-        multiplier: f64,
-        jitter: bool,
-    ) -> Self {
-        self.max_retries = max_retries;
-        self.retry_policy = RetryPolicy::ExponentialBackoff {
-            initial_delay_ms,
-            max_delay_ms,
-            multiplier,
-            jitter,
-        };
-        self
-    }
-
-    pub fn with_api_guided_retry(
-        mut self,
-        max_retries: u32,
-        fallback_policy: RetryPolicy,
-        max_api_delay_ms: u64,
-    ) -> Self {
-        self.max_retries = max_retries;
-        self.retry_policy = RetryPolicy::ApiGuided {
-            fallback: Box::new(fallback_policy),
-            max_api_delay_ms,
-            retry_headers: vec![
-                "retry-after".to_string(),
-                "x-ratelimit-reset".to_string(),
-                "x-ratelimit-reset-after".to_string(),
-                "reset-time".to_string(),
-            ],
-        };
-        self
-    }
-
-    pub fn with_smart_retry(mut self, max_retries: u32) -> Self {
-        // Smart retry: API-guided with exponential backoff fallback
-        self.max_retries = max_retries;
-        self.retry_policy = RetryPolicy::default();
         self
     }
 }
@@ -315,14 +182,6 @@ impl ProviderConfig for OpenAICompatibleConfig {
         headers
     }
 
-    fn max_retries(&self) -> u32 {
-        self.max_retries
-    }
-
-    fn retry_policy(&self) -> RetryPolicy {
-        self.retry_policy.clone()
-    }
-
     fn validate(&self) -> Result<(), crate::error::LlmError> {
         if self.api_key.is_empty() {
             return Err(crate::error::LlmError::configuration("API key is required"));
@@ -341,8 +200,6 @@ pub struct AnthropicConfig {
     pub api_key: String,
     pub base_url: Option<String>,
     pub timeout_seconds: u64,
-    pub max_retries: u32,
-    pub retry_policy: RetryPolicy,
 }
 
 impl AnthropicConfig {
@@ -351,8 +208,6 @@ impl AnthropicConfig {
             api_key: api_key.into(),
             base_url: None,
             timeout_seconds: 30,
-            max_retries: 3,
-            retry_policy: RetryPolicy::default(),
         }
     }
 
@@ -385,14 +240,6 @@ impl ProviderConfig for AnthropicConfig {
         headers
     }
 
-    fn max_retries(&self) -> u32 {
-        self.max_retries
-    }
-
-    fn retry_policy(&self) -> RetryPolicy {
-        self.retry_policy.clone()
-    }
-
     fn validate(&self) -> Result<(), crate::error::LlmError> {
         if self.api_key.is_empty() {
             return Err(crate::error::LlmError::configuration(
@@ -410,8 +257,6 @@ pub struct GoogleAiConfig {
     pub api_key: String,
     pub base_url: Option<String>,
     pub timeout_seconds: u64,
-    pub max_retries: u32,
-    pub retry_policy: RetryPolicy,
 }
 
 impl GoogleAiConfig {
@@ -420,8 +265,6 @@ impl GoogleAiConfig {
             api_key: api_key.into(),
             base_url: None,
             timeout_seconds: 30,
-            max_retries: 3,
-            retry_policy: RetryPolicy::default(),
         }
     }
 
@@ -450,14 +293,6 @@ impl ProviderConfig for GoogleAiConfig {
         let mut headers = HashMap::new();
         headers.insert("Content-Type".to_string(), "application/json".to_string());
         headers
-    }
-
-    fn max_retries(&self) -> u32 {
-        self.max_retries
-    }
-
-    fn retry_policy(&self) -> RetryPolicy {
-        self.retry_policy.clone()
     }
 
     fn validate(&self) -> Result<(), crate::error::LlmError> {
@@ -561,74 +396,5 @@ impl ConfigBuilder {
 
         config.validate()?;
         Ok(config)
-    }
-}
-
-/// Utility functions for parsing retry timing from HTTP headers
-pub mod retry_parsing {
-    use super::*;
-    use std::str::FromStr;
-
-    /// Parse retry delay from HTTP response headers
-    pub fn parse_retry_delay(
-        headers: &HashMap<String, String>,
-        retry_headers: &[String],
-        max_delay_ms: u64,
-    ) -> Option<Duration> {
-        for header_name in retry_headers {
-            if let Some(value) = headers.get(header_name) {
-                if let Some(delay) = parse_single_header(header_name, value, max_delay_ms) {
-                    return Some(delay);
-                }
-            }
-        }
-        None
-    }
-
-    fn parse_single_header(header_name: &str, value: &str, max_delay_ms: u64) -> Option<Duration> {
-        match header_name.to_lowercase().as_str() {
-            "retry-after" => parse_retry_after(value, max_delay_ms),
-            "x-ratelimit-reset" => parse_reset_timestamp(value, max_delay_ms),
-            "x-ratelimit-reset-after" => parse_seconds(value, max_delay_ms),
-            "reset-time" => parse_reset_timestamp(value, max_delay_ms),
-            _ => None,
-        }
-    }
-
-    fn parse_retry_after(value: &str, max_delay_ms: u64) -> Option<Duration> {
-        // Retry-After can be either seconds or HTTP date
-        if let Ok(seconds) = u64::from_str(value.trim()) {
-            let delay_ms = seconds * 1000;
-            if delay_ms <= max_delay_ms {
-                return Some(Duration::from_millis(delay_ms));
-            }
-        }
-        // TODO: Add HTTP date parsing if needed
-        None
-    }
-
-    fn parse_reset_timestamp(value: &str, max_delay_ms: u64) -> Option<Duration> {
-        if let Ok(timestamp) = u64::from_str(value.trim()) {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
-
-            if timestamp > now {
-                let delay_seconds = timestamp - now;
-                let delay_ms = delay_seconds * 1000;
-                if delay_ms <= max_delay_ms {
-                    return Some(Duration::from_millis(delay_ms));
-                }
-            }
-        }
-        None
-    }
-
-    fn parse_seconds(value: &str, max_delay_ms: u64) -> Option<Duration> {
-        if let Ok(seconds) = u64::from_str(value.trim()) {
-            let delay_ms = seconds * 1000;
-            if delay_ms <= max_delay_ms {
-                return Some(Duration::from_millis(delay_ms));
-            }
-        }
-        None
     }
 }

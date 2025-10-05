@@ -10,7 +10,7 @@ rust-version = "1.85"
 [workspace.dependencies]
 # Core library dependencies
 tokio = { version = "1", features = ["full"] }
-tower = { version = "0.4", features = ["timeout", "retry", "limit", "util"] }
+tower = { version = "0.4", features = ["timeout", "limit", "util"] }
 rand = "0.8"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 bytes = "1.0"
