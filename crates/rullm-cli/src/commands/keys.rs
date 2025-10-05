@@ -82,7 +82,7 @@ impl KeysArgs {
                 let api_keys = cli_config.api_keys.clone();
 
                 for provider in Provider::iter() {
-                    let has_key = match provider {
+                    let has_cli_key = match provider {
                         Provider::OpenAI => api_keys.openai_api_key.is_some(),
                         Provider::Groq => api_keys.groq_api_key.is_some(),
                         Provider::OpenRouter => api_keys.openrouter_api_key.is_some(),
@@ -90,9 +90,23 @@ impl KeysArgs {
                         Provider::Google => api_keys.google_ai_api_key.is_some(),
                     };
 
-                    if has_key {
+                    let has_env_key = std::env::var(provider.env_key()).is_ok();
+
+                    let source_info = if has_cli_key {
+                        Some("cli".to_string())
+                    } else if has_env_key {
+                        Some(format!("env ({})", provider.env_key()))
+                    } else {
+                        None
+                    };
+
+                    if let Some(source) = source_info {
                         crate::output::note(
-                            &crate::output::format_provider(&provider.to_string()),
+                            &format!(
+                                "{}: {}",
+                                crate::output::format_provider(&provider.to_string()),
+                                source
+                            ),
                             output_level,
                         );
                     }
