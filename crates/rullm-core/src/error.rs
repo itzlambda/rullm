@@ -195,34 +195,6 @@ impl LlmError {
             source: Some(source.into()),
         }
     }
-
-    /// Check if the error is retryable
-    pub fn is_retryable(&self) -> bool {
-        match self {
-            LlmError::Network { .. } => true,
-            LlmError::RateLimit { .. } => true,
-            LlmError::Timeout { .. } => true,
-            LlmError::ServiceUnavailable { .. } => true,
-            LlmError::Api { code, .. } => {
-                // Some API errors are retryable (e.g., 500, 502, 503, 504)
-                code.as_ref()
-                    .map(|c| matches!(c.as_str(), "500" | "502" | "503" | "504"))
-                    .unwrap_or(false)
-            }
-            _ => false,
-        }
-    }
-
-    /// Get retry delay for retryable errors
-    pub fn retry_delay(&self) -> Option<std::time::Duration> {
-        match self {
-            LlmError::RateLimit { retry_after, .. } => *retry_after,
-            LlmError::Network { .. } => Some(std::time::Duration::from_secs(1)),
-            LlmError::Timeout { .. } => Some(std::time::Duration::from_millis(500)),
-            LlmError::ServiceUnavailable { .. } => Some(std::time::Duration::from_secs(5)),
-            _ => None,
-        }
-    }
 }
 
 /// Convert from reqwest errors

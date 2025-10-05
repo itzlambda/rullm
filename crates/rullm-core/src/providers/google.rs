@@ -479,7 +479,7 @@ impl ChatCompletion for GoogleProvider {
             };
 
             // Google now returns Server-Sent Events (SSE) for streaming responses.
-            // Leverage the shared `sse_lines` util to properly parse the stream.
+            // Use the shared `sse_lines` util to parse the stream.
 
             let byte_stream = response.bytes_stream();
             let mut sse_stream = sse_lines(byte_stream);

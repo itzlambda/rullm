@@ -29,12 +29,11 @@ The `openai_compatible` provider is a generic implementation that other provider
 
 ### Middleware Stack
 
-The library uses Tower middleware for enterprise features (see `crates/rullm-core/src/middleware.rs`):
-- Retry logic with exponential backoff
+The library uses Tower middleware (see `crates/rullm-core/src/middleware.rs`):
 - Rate limiting
-- Circuit breakers
 - Timeouts
 - Connection pooling
+- Logging and metrics
 
 Configuration is done via `MiddlewareConfig` and `LlmServiceBuilder`.
 

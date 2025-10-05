@@ -226,8 +226,8 @@ fn test_openai_config() {
 
     config.validate().unwrap();
 
-    // Test invalid config
-    let invalid_config = OpenAIConfig::new("invalid-key");
+    // Test invalid config (empty API key)
+    let invalid_config = OpenAIConfig::new("");
     assert!(invalid_config.validate().is_err());
 }
 
@@ -262,37 +262,6 @@ fn test_google_ai_config() {
     );
 
     config.validate().unwrap();
-}
-
-#[test]
-fn test_error_retry_logic() {
-    let network_error = LlmError::network("Connection failed");
-    assert!(network_error.is_retryable());
-    assert_eq!(
-        network_error.retry_delay(),
-        Some(std::time::Duration::from_secs(1))
-    );
-
-    let rate_limit_error = LlmError::rate_limit(
-        "Too many requests",
-        Some(std::time::Duration::from_secs(60)),
-    );
-    assert!(rate_limit_error.is_retryable());
-    assert_eq!(
-        rate_limit_error.retry_delay(),
-        Some(std::time::Duration::from_secs(60))
-    );
-
-    let auth_error = LlmError::authentication("Invalid API key");
-    assert!(!auth_error.is_retryable());
-    assert_eq!(auth_error.retry_delay(), None);
-
-    let api_error_retryable = LlmError::api("test", "Server error", Some("503".to_string()), None);
-    assert!(api_error_retryable.is_retryable());
-
-    let api_error_not_retryable =
-        LlmError::api("test", "Bad request", Some("400".to_string()), None);
-    assert!(!api_error_not_retryable.is_retryable());
 }
 
 #[test]
@@ -426,66 +395,6 @@ fn test_error_conversions() {
 }
 
 #[test]
-fn test_retry_logic_comprehensive() {
-    // Test all retryable error types
-    let network_error = LlmError::network("Connection failed");
-    assert!(network_error.is_retryable());
-    assert_eq!(
-        network_error.retry_delay(),
-        Some(std::time::Duration::from_secs(1))
-    );
-
-    let rate_limit_error =
-        LlmError::rate_limit("Rate limited", Some(std::time::Duration::from_secs(30)));
-    assert!(rate_limit_error.is_retryable());
-    assert_eq!(
-        rate_limit_error.retry_delay(),
-        Some(std::time::Duration::from_secs(30))
-    );
-
-    let timeout_error = LlmError::timeout(std::time::Duration::from_secs(10));
-    assert!(timeout_error.is_retryable());
-    assert_eq!(
-        timeout_error.retry_delay(),
-        Some(std::time::Duration::from_millis(500))
-    );
-
-    let service_error = LlmError::service_unavailable("openai");
-    assert!(service_error.is_retryable());
-    assert_eq!(
-        service_error.retry_delay(),
-        Some(std::time::Duration::from_secs(5))
-    );
-
-    // Test retryable API errors (5xx)
-    let server_error = LlmError::api("test", "Server error", Some("502".to_string()), None);
-    assert!(server_error.is_retryable());
-
-    let gateway_timeout = LlmError::api("test", "Gateway timeout", Some("504".to_string()), None);
-    assert!(gateway_timeout.is_retryable());
-
-    // Test non-retryable error types
-    let auth_error = LlmError::authentication("Invalid key");
-    assert!(!auth_error.is_retryable());
-    assert_eq!(auth_error.retry_delay(), None);
-
-    let config_error = LlmError::configuration("Bad config");
-    assert!(!config_error.is_retryable());
-    assert_eq!(config_error.retry_delay(), None);
-
-    let validation_error = LlmError::validation("Invalid input");
-    assert!(!validation_error.is_retryable());
-    assert_eq!(validation_error.retry_delay(), None);
-
-    // Test non-retryable API errors (4xx)
-    let bad_request = LlmError::api("test", "Bad request", Some("400".to_string()), None);
-    assert!(!bad_request.is_retryable());
-
-    let unauthorized = LlmError::api("test", "Unauthorized", Some("401".to_string()), None);
-    assert!(!unauthorized.is_retryable());
-}
-
-#[test]
 fn test_provider_specific_error_mapping() {
     use std::collections::HashMap;
 
@@ -592,34 +501,6 @@ fn test_provider_specific_error_mapping() {
             &serde_json::Value::String("RATE_LIMIT_EXCEEDED".to_string())
         );
     }
-
-    // Test retryable server errors (500, 502, 503, 504)
-    let internal_error = LlmError::api(
-        "any_provider",
-        "Internal server error",
-        Some("500".to_string()),
-        None,
-    );
-    assert!(internal_error.is_retryable());
-
-    let bad_gateway = LlmError::api("any_provider", "Bad gateway", Some("502".to_string()), None);
-    assert!(bad_gateway.is_retryable());
-
-    let service_unavailable = LlmError::api(
-        "any_provider",
-        "Service unavailable",
-        Some("503".to_string()),
-        None,
-    );
-    assert!(service_unavailable.is_retryable());
-
-    // Test non-retryable client errors (400, 401, etc.)
-    let bad_request = LlmError::api("any_provider", "Bad request", Some("400".to_string()), None);
-    assert!(!bad_request.is_retryable());
-
-    // Test client error (should not be retryable)
-    let client_error = LlmError::api("any_provider", "Bad request", Some("400".to_string()), None);
-    assert!(!client_error.is_retryable());
 }
 
 #[test]
@@ -953,110 +834,11 @@ fn test_anthropic_response_parsing_errors() {
 // Middleware Tests
 // =============================================================================
 
-#[derive(Clone)]
-struct MockFailingProvider {
-    name: &'static str,
-    fail_count: std::sync::Arc<std::sync::Mutex<u32>>,
-    max_failures: u32,
-}
-
-impl MockFailingProvider {
-    fn new(name: &'static str, max_failures: u32) -> Self {
-        Self {
-            name,
-            fail_count: std::sync::Arc::new(std::sync::Mutex::new(0)),
-            max_failures,
-        }
-    }
-
-    fn failure_count(&self) -> u32 {
-        *self.fail_count.lock().unwrap()
-    }
-}
-
-#[async_trait::async_trait]
-impl LlmProvider for MockFailingProvider {
-    fn name(&self) -> &'static str {
-        self.name
-    }
-
-    fn aliases(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn default_base_url(&self) -> Option<&'static str> {
-        Some("")
-    }
-
-    fn env_key(&self) -> &'static str {
-        ""
-    }
-
-    async fn available_models(&self) -> Result<Vec<String>, LlmError> {
-        Ok(vec!["test-model".to_string()])
-    }
-
-    async fn health_check(&self) -> Result<(), LlmError> {
-        Ok(())
-    }
-}
-
-#[async_trait::async_trait]
-impl ChatCompletion for MockFailingProvider {
-    async fn chat_completion(
-        &self,
-        _request: ChatRequest,
-        model: &str,
-    ) -> Result<ChatResponse, LlmError> {
-        let mut count = self.fail_count.lock().unwrap();
-        if *count < self.max_failures {
-            *count += 1;
-            return Err(LlmError::api(
-                self.name,
-                "Simulated failure",
-                Some("500".to_string()),
-                None,
-            ));
-        }
-
-        Ok(ChatResponse {
-            message: ChatMessage {
-                role: ChatRole::Assistant,
-                content: "Success after retries".to_string(),
-            },
-            model: model.to_string(),
-            usage: TokenUsage {
-                prompt_tokens: 10,
-                completion_tokens: 5,
-                total_tokens: 15,
-            },
-            finish_reason: Some("stop".to_string()),
-            provider_metadata: None,
-        })
-    }
-
-    async fn chat_completion_stream(
-        &self,
-        _request: ChatRequest,
-        _model: &str,
-        _config: Option<StreamConfig>,
-    ) -> crate::types::StreamResult<crate::types::ChatStreamEvent> {
-        Box::pin(futures::stream::once(async {
-            Err(LlmError::model("Streaming not implemented"))
-        }))
-    }
-
-    async fn estimate_tokens(&self, text: &str, _model: &str) -> Result<u32, LlmError> {
-        Ok(text.len() as u32 / 4)
-    }
-}
-
 #[test]
 fn test_middleware_config_default() {
     let config = MiddlewareConfig::default();
 
     assert_eq!(config.timeout, Some(Duration::from_secs(30)));
-    assert!(config.retry_policy.is_some());
     assert!(config.rate_limit.is_none());
     assert!(config.enable_logging);
     assert!(!config.enable_metrics);
@@ -1071,17 +853,12 @@ fn test_middleware_config_custom() {
 
     let config = MiddlewareConfig {
         timeout: Some(Duration::from_secs(45)),
-        retry_policy: Some(RetryPolicy::Fixed { delay_ms: 1000 }),
         rate_limit: Some(rate_limit.clone()),
         enable_logging: false,
         enable_metrics: true,
     };
 
     assert_eq!(config.timeout, Some(Duration::from_secs(45)));
-    assert!(matches!(
-        config.retry_policy,
-        Some(RetryPolicy::Fixed { delay_ms: 1000 })
-    ));
     assert!(config.rate_limit.is_some());
     assert!(!config.enable_logging);
     assert!(config.enable_metrics);
@@ -1108,7 +885,6 @@ fn test_llm_service_builder_fluent_api() {
 
     let middleware_stack = LlmServiceBuilder::new()
         .timeout(Duration::from_secs(60))
-        .retry(RetryPolicy::Fixed { delay_ms: 500 })
         .rate_limit(50, Duration::from_secs(30))
         .logging()
         .metrics()
@@ -1116,10 +892,6 @@ fn test_llm_service_builder_fluent_api() {
 
     let config = middleware_stack.config();
     assert_eq!(config.timeout, Some(Duration::from_secs(60)));
-    assert!(matches!(
-        config.retry_policy,
-        Some(RetryPolicy::Fixed { delay_ms: 500 })
-    ));
     assert!(config.rate_limit.is_some());
     assert!(config.enable_logging);
     assert!(config.enable_metrics);
@@ -1133,12 +905,6 @@ fn test_llm_service_builder_fluent_api() {
 fn test_llm_service_builder_with_config() {
     let custom_config = MiddlewareConfig {
         timeout: Some(Duration::from_secs(20)),
-        retry_policy: Some(RetryPolicy::ExponentialBackoff {
-            initial_delay_ms: 200,
-            max_delay_ms: 4000,
-            multiplier: 1.5,
-            jitter: true,
-        }),
         rate_limit: None,
         enable_logging: false,
         enable_metrics: true,
@@ -1168,118 +934,6 @@ async fn test_middleware_stack_basic_call() {
     assert_eq!(response.message.content, "Mock response");
     assert_eq!(response.model, "test-model");
     assert_eq!(response.usage.total_tokens, 15);
-}
-
-#[tokio::test]
-async fn test_middleware_retry_logic_success() {
-    // Provider that fails 2 times then succeeds
-    let provider = MockFailingProvider::new("test", 2);
-    let mut middleware_stack = LlmServiceBuilder::new()
-        .retry(RetryPolicy::Fixed { delay_ms: 10 }) // Fast retry for testing
-        .build(provider.clone(), "test-model".to_string());
-
-    let request = ChatRequestBuilder::new().user("Test retry logic").build();
-
-    let start = std::time::Instant::now();
-    let response = middleware_stack.call(request).await.unwrap();
-    let duration = start.elapsed();
-
-    assert_eq!(response.message.content, "Success after retries");
-    assert_eq!(provider.failure_count(), 2);
-    // Should have taken at least 20ms (2 retries * 10ms delay)
-    assert!(duration >= Duration::from_millis(20));
-}
-
-#[tokio::test]
-async fn test_middleware_retry_logic_failure() {
-    // Provider that always fails
-    let provider = MockFailingProvider::new("test", 10); // More failures than max retries
-    let mut middleware_stack = LlmServiceBuilder::new()
-        .retry(RetryPolicy::Fixed { delay_ms: 10 })
-        .build(provider.clone(), "test-model".to_string());
-
-    let request = ChatRequestBuilder::new()
-        .user("Test retry exhaustion")
-        .build();
-
-    let result = middleware_stack.call(request).await;
-
-    assert!(result.is_err());
-    // Should have made initial attempt + 3 retries = 4 total attempts
-    assert_eq!(provider.failure_count(), 4);
-
-    let error = result.unwrap_err();
-    assert!(matches!(error, LlmError::Api { .. }));
-}
-
-#[tokio::test]
-async fn test_middleware_exponential_backoff() {
-    let provider = MockFailingProvider::new("test", 3);
-    let mut middleware_stack = LlmServiceBuilder::new()
-        .retry(RetryPolicy::ExponentialBackoff {
-            initial_delay_ms: 10,
-            max_delay_ms: 100,
-            multiplier: 2.0,
-            jitter: false,
-        })
-        .build(provider.clone(), "test-model".to_string());
-
-    let request = ChatRequestBuilder::new()
-        .user("Test exponential backoff")
-        .build();
-
-    let start = std::time::Instant::now();
-    let response = middleware_stack.call(request).await.unwrap();
-    let duration = start.elapsed();
-
-    assert_eq!(response.message.content, "Success after retries");
-    assert_eq!(provider.failure_count(), 3);
-
-    // Should have delays of 10ms, 20ms, 40ms = 70ms minimum
-    assert!(duration >= Duration::from_millis(70));
-}
-
-#[tokio::test]
-async fn test_middleware_api_guided_retry() {
-    let provider = MockFailingProvider::new("test", 2);
-    let mut middleware_stack = LlmServiceBuilder::new()
-        .retry(RetryPolicy::ApiGuided {
-            fallback: Box::new(RetryPolicy::Fixed { delay_ms: 20 }),
-            max_api_delay_ms: 1000,
-            retry_headers: vec!["retry-after".to_string()],
-        })
-        .build(provider.clone(), "test-model".to_string());
-
-    let request = ChatRequestBuilder::new()
-        .user("Test API guided retry")
-        .build();
-
-    let response = middleware_stack.call(request).await.unwrap();
-
-    assert_eq!(response.message.content, "Success after retries");
-    assert_eq!(provider.failure_count(), 2);
-}
-
-#[tokio::test]
-async fn test_middleware_no_retry_policy() {
-    let provider = MockFailingProvider::new("test", 1);
-    let middleware_stack = LlmServiceBuilder::new()
-        // No retry policy
-        .build(provider.clone(), "test-model".to_string());
-
-    // Remove retry policy
-    let mut config = middleware_stack.config().clone();
-    config.retry_policy = None;
-    let mut middleware_stack =
-        LlmServiceBuilder::with_config(config).build(provider.clone(), "test-model".to_string());
-
-    let request = ChatRequestBuilder::new().user("Test no retry").build();
-
-    let result = middleware_stack.call(request).await;
-
-    assert!(result.is_err());
-    // Should fail immediately, no retries
-    assert_eq!(provider.failure_count(), 1);
 }
 
 #[tokio::test]
@@ -1329,7 +983,6 @@ fn test_rate_limit_configuration() {
 async fn test_middleware_error_propagation() {
     let provider = MockProvider::new("test").with_failure();
     let mut middleware_stack = LlmServiceBuilder::new()
-        .retry(RetryPolicy::Fixed { delay_ms: 1 }) // Fast retry
         .logging()
         .build(provider, "test-model".to_string());
 
@@ -1346,12 +999,6 @@ async fn test_middleware_error_propagation() {
 fn test_middleware_config_inspection() {
     let custom_config = MiddlewareConfig {
         timeout: Some(Duration::from_secs(25)),
-        retry_policy: Some(RetryPolicy::ExponentialBackoff {
-            initial_delay_ms: 150,
-            max_delay_ms: 6000,
-            multiplier: 2.5,
-            jitter: true,
-        }),
         rate_limit: Some(RateLimit {
             requests_per_period: 75,
             period: Duration::from_secs(45),
@@ -1370,21 +1017,6 @@ fn test_middleware_config_inspection() {
     assert_eq!(config.timeout, Some(Duration::from_secs(25)));
     assert!(config.enable_logging);
     assert!(!config.enable_metrics);
-
-    if let Some(RetryPolicy::ExponentialBackoff {
-        initial_delay_ms,
-        max_delay_ms,
-        multiplier,
-        jitter,
-    }) = &config.retry_policy
-    {
-        assert_eq!(*initial_delay_ms, 150);
-        assert_eq!(*max_delay_ms, 6000);
-        assert_eq!(*multiplier, 2.5);
-        assert!(*jitter);
-    } else {
-        panic!("Expected ExponentialBackoff retry policy");
-    }
 
     if let Some(rate_limit) = &config.rate_limit {
         assert_eq!(rate_limit.requests_per_period, 75);

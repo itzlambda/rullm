@@ -1,18 +1,17 @@
 //! # rullm-core - Rust LLM Library
 //!
-//! A high-performance Rust library for interacting with Large Language Models (LLMs).
-//! Built with Tower middleware for enterprise-grade reliability, featuring retry logic,
-//! rate limiting, circuit breakers, and comprehensive error handling.
+//! A Rust library for interacting with Large Language Models (LLMs).
+//! Built with Tower middleware, featuring rate limiting and error handling.
 //!
 //! ## Features
 //!
-//! - **Multiple LLM Providers** - OpenAI, Anthropic, Google AI
-//! - **High Performance** - Built on Tower with connection pooling and async/await
-//! - **Enterprise Ready** - Retry logic, rate limiting, circuit breakers, timeouts
-//! - **Dual APIs** - Simple string-based API + advanced API with full control
-//! - **Real-time Streaming** - Stream responses token by token as they're generated
-//! - **Well Tested** - Comprehensive test suite with examples
-//! - **Observability** - Built-in metrics, logging, and error handling
+//! - Multiple LLM Providers (OpenAI, Anthropic, Google AI)
+//! - Tower middleware with connection pooling and async/await
+//! - Rate limiting, timeouts, and error handling
+//! - Dual APIs: Simple string-based API and advanced API with full control
+//! - Streaming support for token-by-token responses
+//! - Test suite with examples
+//! - Metrics, logging, and error handling
 //!
 //! ## Quick Start
 //!
@@ -33,19 +32,19 @@
 //! ### Advanced API (Full Control)
 //!
 //! ```rust,no_run
-//! use rullm_core::{OpenAIConfig, OpenAIProvider, ChatProvider, ChatRequestBuilder, ChatRole};
+//! use rullm_core::{OpenAIConfig, OpenAIProvider, ChatCompletion, ChatRequestBuilder, ChatRole};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = OpenAIConfig::new("your-api-key");
 //!     let provider = OpenAIProvider::new(config)?;
-//!     
+//!
 //!     let request = ChatRequestBuilder::new()
 //!         .user("Hello, world!")
 //!         .temperature(0.7)
 //!         .max_tokens(100)
 //!         .build();
-//!     
+//!
 //!     let response = provider.chat_completion(request, "gpt-3.5-turbo").await?;
 //!     println!("Response: {}", response.message.content);
 //!     Ok(())
@@ -54,7 +53,7 @@
 //!
 //! ## Streaming API Overview
 //!
-//! The streaming API enables real-time token-by-token responses, perfect for interactive
+//! The streaming API enables real-time token-by-token responses for interactive
 //! chat applications and live user experiences.
 //!
 //! ### Core Streaming Types
@@ -66,13 +65,14 @@
 //! ### Basic Streaming Usage
 //!
 //! ```rust,no_run
-//! use rullm_core::{OpenAIProvider, ChatProvider, ChatRequestBuilder, ChatStreamEvent};
+//! use rullm_core::{OpenAIProvider, OpenAIConfig, ChatCompletion, ChatRequestBuilder, ChatStreamEvent};
 //! use futures::StreamExt;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let provider = OpenAIProvider::new(/* config */)?;
-//!     
+//!     let config = OpenAIConfig::new("your-api-key");
+//!     let provider = OpenAIProvider::new(config)?;
+//!
 //!     let request = ChatRequestBuilder::new()
 //!         .user("Tell me a story")
 //!         .stream(true) // Enable streaming
@@ -104,7 +104,7 @@
 //!
 //! ### Streaming Examples
 //!
-//! The library includes comprehensive streaming examples for each provider:
+//! The library includes streaming examples for each provider:
 //!
 //! - `openai_stream.rs` - OpenAI GPT models streaming
 //! - `anthropic_stream.rs` - Anthropic Claude models streaming  
@@ -127,19 +127,25 @@
 //!
 //! ## Error Handling
 //!
-//! All operations return [`Result<T, LlmError>`](LlmError) for comprehensive error handling:
+//! All operations return [`Result<T, LlmError>`](LlmError) for error handling:
 //!
-//! ```rust,no_run
-//! use rullm_core::{LlmError, OpenAIProvider, ChatProvider};
+//! ```rust,ignore
+//! use rullm_core::{LlmError, OpenAIProvider, OpenAIConfig, ChatCompletion, ChatRequestBuilder};
 //!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! # let config = OpenAIConfig::new("your-api-key");
+//! # let provider = OpenAIProvider::new(config)?;
+//! # let request = ChatRequestBuilder::new().user("test").build();
 //! match provider.chat_completion(request, "gpt-4").await {
 //!     Ok(response) => println!("Success: {}", response.message.content),
-//!     Err(LlmError::Authentication(_)) => println!("Invalid API key"),
-//!     Err(LlmError::RateLimit { retry_after }) => {
+//!     Err(LlmError::Authentication { .. }) => println!("Invalid API key"),
+//!     Err(LlmError::RateLimit { retry_after, .. }) => {
 //!         println!("Rate limited, retry after: {:?}", retry_after);
 //!     }
 //!     Err(e) => println!("Other error: {}", e),
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod config;

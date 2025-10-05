@@ -1,4 +1,3 @@
-use crate::config::RetryPolicy;
 use crate::error::LlmError;
 use crate::types::{
     ChatCompletion, ChatRequest, ChatResponse, ChatStreamEvent, StreamConfig, StreamResult,
@@ -8,16 +7,6 @@ use metrics::{counter, histogram};
 
 use std::pin::Pin;
 use std::time::{Duration, Instant};
-
-/// Retry attempt information for logging and diagnostics
-#[derive(Debug, Clone)]
-pub struct RetryInfo {
-    pub attempt: u32,
-    pub max_retries: u32,
-    pub delay: Duration,
-    pub reason: String,
-    pub response_status: Option<u16>,
-}
 
 /// Streaming metrics collector
 #[derive(Debug, Clone)]
@@ -169,33 +158,10 @@ where
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_retry_info_creation() {
-        let retry_info = RetryInfo {
-            attempt: 2,
-            max_retries: 3,
-            delay: Duration::from_millis(200),
-            reason: "HTTP 500".to_string(),
-            response_status: Some(500),
-        };
-
-        assert_eq!(retry_info.attempt, 2);
-        assert_eq!(retry_info.max_retries, 3);
-        assert_eq!(retry_info.delay, Duration::from_millis(200));
-        assert_eq!(retry_info.reason, "HTTP 500");
-        assert_eq!(retry_info.response_status, Some(500));
-    }
-}
-
 /// Middleware configuration for LLM providers
 #[derive(Debug, Clone)]
 pub struct MiddlewareConfig {
     pub timeout: Option<Duration>,
-    pub retry_policy: Option<RetryPolicy>,
     pub rate_limit: Option<RateLimit>,
     pub enable_logging: bool,
     pub enable_metrics: bool,
@@ -205,12 +171,6 @@ impl Default for MiddlewareConfig {
     fn default() -> Self {
         Self {
             timeout: Some(Duration::from_secs(30)),
-            retry_policy: Some(RetryPolicy::ExponentialBackoff {
-                initial_delay_ms: 100,
-                max_delay_ms: 5000,
-                multiplier: 2.0,
-                jitter: false,
-            }),
             rate_limit: None,
             enable_logging: true,
             enable_metrics: false,
@@ -248,11 +208,6 @@ impl LlmServiceBuilder {
 
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.middleware_config.timeout = Some(timeout);
-        self
-    }
-
-    pub fn retry(mut self, policy: RetryPolicy) -> Self {
-        self.middleware_config.retry_policy = Some(policy);
         self
     }
 
@@ -309,12 +264,8 @@ where
             );
         }
 
-        // Apply retry logic
-        let result = if let Some(ref policy) = self.config.retry_policy {
-            self.call_with_retry(request, policy).await
-        } else {
-            self.provider.chat_completion(request, &self.model).await
-        };
+        // Make the request
+        let result = self.provider.chat_completion(request, &self.model).await;
 
         // Apply metrics and logging
         match &result {
@@ -351,68 +302,7 @@ where
         result
     }
 
-    async fn call_with_retry(
-        &self,
-        request: ChatRequest,
-        policy: &RetryPolicy,
-    ) -> Result<ChatResponse, LlmError> {
-        let max_retries = 3; // Could be configurable
-        let mut attempt = 0;
-
-        loop {
-            match self
-                .provider
-                .chat_completion(request.clone(), &self.model)
-                .await
-            {
-                Ok(response) => return Ok(response),
-                Err(error) => {
-                    if attempt >= max_retries || !error.is_retryable() {
-                        return Err(error);
-                    }
-
-                    let delay = match policy {
-                        RetryPolicy::Fixed { delay_ms } => Duration::from_millis(*delay_ms),
-                        RetryPolicy::ExponentialBackoff {
-                            initial_delay_ms,
-                            max_delay_ms,
-                            multiplier,
-                            jitter: _,
-                        } => {
-                            let delay_ms =
-                                (*initial_delay_ms as f64 * multiplier.powi(attempt)) as u64;
-                            let delay_ms = std::cmp::min(delay_ms, *max_delay_ms);
-                            Duration::from_millis(delay_ms)
-                        }
-                        RetryPolicy::ApiGuided { fallback, .. } => {
-                            // For simplicity, use fallback policy
-                            match fallback.as_ref() {
-                                RetryPolicy::Fixed { delay_ms } => Duration::from_millis(*delay_ms),
-                                RetryPolicy::ExponentialBackoff {
-                                    initial_delay_ms,
-                                    max_delay_ms,
-                                    multiplier,
-                                    jitter: _,
-                                } => {
-                                    let delay_ms = (*initial_delay_ms as f64
-                                        * multiplier.powi(attempt))
-                                        as u64;
-                                    let delay_ms = std::cmp::min(delay_ms, *max_delay_ms);
-                                    Duration::from_millis(delay_ms)
-                                }
-                                RetryPolicy::ApiGuided { .. } => Duration::from_millis(1000), // Fallback
-                            }
-                        }
-                    };
-
-                    tokio::time::sleep(delay).await;
-                    attempt += 1;
-                }
-            }
-        }
-    }
-
-    /// Streaming version with retry logic only for initial call and metrics tracking
+    /// Streaming version with metrics tracking
     pub async fn call_stream(
         &self,
         request: ChatRequest,
@@ -427,18 +317,11 @@ where
             );
         }
 
-        // Apply retry logic only for the initial call
-        let stream = if let Some(ref _policy) = self.config.retry_policy {
-            // For streaming, we can't really retry on a Stream, so just call normally
-            // Retry logic would be complex for streams, so just use direct call for now
-            self.provider
-                .chat_completion_stream(request, &self.model, config)
-                .await
-        } else {
-            self.provider
-                .chat_completion_stream(request, &self.model, config)
-                .await
-        };
+        // Make the streaming request
+        let stream = self
+            .provider
+            .chat_completion_stream(request, &self.model, config)
+            .await;
 
         let metrics_stream = MetricsStream::new(stream, provider_name);
 

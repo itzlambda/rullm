@@ -219,7 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "• Models: gemini-1.5-flash (fast), gemini-1.5-pro (balanced), gemini-2.0-flash-exp (experimental)"
     );
-    println!("• Gemini excels at reasoning, code analysis, and creative tasks");
+    println!("• Gemini supports reasoning, code analysis, and creative tasks");
     println!("• Lower temperature (0.1-0.4) for factual/technical content");
     println!("• Higher temperature (0.7-1.0) for creative content");
     println!("• Use top_p for more controlled randomness");
