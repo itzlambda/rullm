@@ -4,128 +4,163 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`rullm` is a Rust library and CLI for interacting with Large Language Models (LLMs). It consists of two main crates:
+`rullm` is a Rust library and CLI for interacting with multiple LLM providers (OpenAI, Anthropic, Google AI, Groq, OpenRouter). The project uses a workspace structure with two main crates:
 
-- **rullm-core**: The core library providing a high-performance LLM client with Tower middleware for enterprise features
-- **rullm-cli**: A CLI tool built on top of rullm-core for interactive LLM usage
+- **rullm-core**: Core library implementing provider integrations, middleware (Tower-based), and streaming support
+- **rullm-cli**: Command-line interface built on top of rullm-core
 
 ## Architecture
 
-### Core Library (rullm-core)
-- **Providers**: Modular provider system supporting OpenAI, Groq, OpenRouter, Anthropic, and Google AI APIs
-  - OpenAI-compatible providers (OpenAI, Groq, OpenRouter) share implementation via `OpenAICompatibleProvider`
-  - Easily extensible to support any OpenAI-compatible API by adding a `ProviderIdentity`
-- **Middleware**: Built on Tower for retry logic, rate limiting, circuit breakers, and timeouts
-- **Dual APIs**: Simple string-based API and advanced API with full control over parameters
-- **Streaming**: Real-time token-by-token streaming support via async streams
-- **Types**: Comprehensive type system for chat messages, requests, responses, and configuration
+### Provider System
 
-### CLI Application (rullm-cli)
-- **Commands**: Modular command structure for chat, models, aliases, keys, templates, etc.
-- **Configuration**: TOML-based config management with user-defined aliases and templates
-- **Interactive Chat**: Full-featured chat mode with history, slash commands, and editor integration
-- **Templates**: TOML-based prompt templates with placeholder substitution
+All LLM providers implement two core traits defined in `crates/rullm-core/src/types.rs`:
+- `LlmProvider`: Base trait with provider metadata (name, aliases, env_key, default_base_url, available_models, health_check)
+- `ChatCompletion`: Extends LlmProvider with chat completion methods (blocking and streaming)
 
-## Development Commands
+Provider implementations are in `crates/rullm-core/src/providers/`:
+- `openai.rs`: OpenAI GPT models
+- `anthropic.rs`: Anthropic Claude models
+- `google.rs`: Google Gemini models
+- `openai_compatible.rs`: Generic provider for OpenAI-compatible APIs
+- `groq.rs`: Groq provider (uses `openai_compatible`)
+- `openrouter.rs`: OpenRouter provider (uses `openai_compatible`)
 
-### Building
+The `openai_compatible` provider is a generic implementation that other providers like Groq and OpenRouter extend. It uses a `ProviderIdentity` struct to define provider-specific metadata.
+
+### Middleware Stack
+
+The library uses Tower middleware for enterprise features (see `crates/rullm-core/src/middleware.rs`):
+- Retry logic with exponential backoff
+- Rate limiting
+- Circuit breakers
+- Timeouts
+- Connection pooling
+
+Configuration is done via `MiddlewareConfig` and `LlmServiceBuilder`.
+
+### Simple API
+
+`crates/rullm-core/src/simple.rs` provides a simplified string-based API (`SimpleLlmClient`, `SimpleLlmBuilder`) that wraps the advanced provider APIs for ease of use.
+
+### CLI Architecture
+
+The CLI entry point is `crates/rullm-cli/src/main.rs`, which:
+1. Parses arguments using clap (see `args.rs`)
+2. Loads configuration from `~/.config/rullm/` (see `config.rs`)
+3. Dispatches to commands in `crates/rullm-cli/src/commands/`
+
+Key CLI modules:
+- `client.rs`: Creates provider clients from model strings (format: `provider:model`)
+- `provider.rs`: Resolves provider names and aliases
+- `config.rs`: Manages CLI configuration (models list, aliases, default model)
+- `api_keys.rs`: Manages API key storage in system keychain
+- `templates.rs`: TOML-based prompt templates with `{{input}}` placeholders
+- `commands/chat/`: Interactive chat mode using reedline for advanced REPL features
+
+### Model Format
+
+Models are specified using the format `provider:model`:
+- Example: `openai:gpt-4`, `anthropic:claude-3-opus-20240229`, `groq:llama-3-8b`
+- The CLI resolves this via `client::from_model()` which creates the appropriate provider client
+
+## Common Development Tasks
+
+### Building and Running
+
 ```bash
-# Build the entire workspace
-cargo build
+# Build everything
+cargo build --all
 
-# Build with release optimizations
+# Build release binary
 cargo build --release
 
-# Build specific crate
-cargo build -p rullm-core
-cargo build -p rullm-cli
+# Run the CLI (from workspace root)
+cargo run -p rullm-cli -- "your query"
+
+# Or after building
+./target/debug/rullm "your query"
+./target/release/rullm "your query"
 ```
 
 ### Testing
+
 ```bash
-# Run all tests
-cargo test
+# Run all tests (note: some require API keys)
+cargo test --all
 
 # Run tests for specific crate
 cargo test -p rullm-core
 cargo test -p rullm-cli
 
-# Run integration tests (may require API keys)
-cargo test --test integration
+# Run a specific test
+cargo test test_name
+
+# Check examples compile
+cargo check --examples
 ```
 
-### Running Examples
+### Code Quality
+
 ```bash
-# Core library examples (require API keys)
-cargo run --example openai_simple
-cargo run --example groq_simple
-cargo run --example openrouter_simple
-cargo run --example anthropic_stream
-cargo run --example gemini_stream
-cargo run --example test_all_providers
-
-# CLI binary
-cargo run -- "What is Rust?"
-cargo run -- chat --model claude
-cargo run -- chat --model groq/llama-3.3-70b-versatile
-```
-
-### Linting and Formatting
-```bash
-# Check code formatting
-cargo fmt --check
-
 # Format code
 cargo fmt
 
-# Run clippy lints
-cargo clippy
+# Check formatting
+cargo fmt -- --check
 
-# Run clippy with all targets
-cargo clippy --all-targets --all-features
+# Run clippy (linter)
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Fix clippy suggestions automatically
+cargo clippy --fix --all-targets --all-features
 ```
 
-## Key Patterns and Conventions
+### Running Examples
 
-### Provider Implementation
-- All providers implement the `ChatProvider` trait with `chat_completion` and `chat_completion_stream` methods
-- Configuration structs follow the pattern `{Provider}Config` (e.g., `OpenAIConfig`, `AnthropicConfig`)
-  - OpenAI-compatible providers use `OpenAICompatibleConfig` with factory methods (`.groq()`, `.openrouter()`)
-- Provider structs follow the pattern `{Provider}Provider` (e.g., `OpenAIProvider`, `GroqProvider`, `OpenRouterProvider`)
-  - OpenAI-compatible providers wrap `OpenAICompatibleProvider` with different `ProviderIdentity` metadata
+```bash
+# Run examples from rullm-core (requires API keys)
+cargo run --example openai_simple
+cargo run --example anthropic_simple
+cargo run --example google_simple
+cargo run --example openai_stream        # Streaming example
+cargo run --example test_all_providers   # Test all providers at once
+```
 
-### Error Handling
-- All public APIs return `Result<T, LlmError>` for comprehensive error handling
-- LlmError enum covers authentication, rate limiting, network issues, and provider-specific errors
-- Streaming APIs emit `ChatStreamEvent` enum variants: `Token`, `Done`, `Error`
+### Adding a New Provider
 
-### Configuration Management
-- CLI config stored in `~/.config/rullm/` (or platform equivalent)
-- Templates stored as TOML files in `templates/` subdirectory
-- Model aliases defined in config.toml for user convenience
+When adding a new provider:
 
-### Testing
-- Unit tests co-located with implementation files
-- Integration tests in `tests/` directories
-- Examples serve as both documentation and integration tests
-- Test helpers in `utils/test_helpers.rs` for common test patterns
+1. **OpenAI-compatible providers**: Use `OpenAICompatibleProvider` with a `ProviderIdentity` in `providers/openai_compatible.rs`. See `groq.rs` or `openrouter.rs` for examples.
 
-## Important Files
+2. **Non-compatible providers**: Create a new file in `crates/rullm-core/src/providers/`:
+   - Implement `LlmProvider` and `ChatCompletion` traits
+   - Add provider config struct in `crates/rullm-core/src/config.rs`
+   - Export from `providers/mod.rs` and `lib.rs`
+   - Add client creation logic in `crates/rullm-cli/src/client.rs`
+   - Update `crates/rullm-cli/src/provider.rs` for CLI support
 
-- `crates/rullm-core/src/lib.rs` - Main library entry point and public API
-- `crates/rullm-core/src/types.rs` - Core type definitions for requests/responses
-- `crates/rullm-core/src/providers/` - LLM provider implementations
-  - `openai_compatible.rs` - Shared implementation for OpenAI-compatible APIs (OpenAI, Groq, OpenRouter)
-  - `openai.rs`, `groq.rs`, `openrouter.rs` - Provider wrappers with specific identities
-  - `anthropic.rs`, `google.rs` - Provider-specific implementations
-- `crates/rullm-cli/src/main.rs` - CLI entry point and argument parsing
-- `crates/rullm-cli/src/commands/` - CLI command implementations
-- `crates/rullm-cli/src/config.rs` - Configuration management
+3. Update `DEFAULT_MODELS` in `crates/rullm-core/src/simple.rs` if adding default model mappings
 
-## Development Notes
+### Streaming Implementation
 
-- The project uses Rust 2024 edition with MSRV 1.85
-- Tower middleware provides enterprise-grade reliability features
-- Async/await throughout with tokio runtime
-- Comprehensive error handling and observability via metrics and logging
-- Shell completion support for bash, zsh, and fish
+All providers should implement `chat_completion_stream()` returning `StreamResult<ChatStreamEvent>`. The stream emits:
+- `ChatStreamEvent::Token(String)`: Each token/chunk
+- `ChatStreamEvent::Done`: Completion marker
+- `ChatStreamEvent::Error(String)`: Errors during streaming
+
+See provider implementations for SSE parsing patterns using `utils::sse::sse_lines()`.
+
+## Configuration Files
+
+- **User config**: `~/.config/rullm/config.toml` (or system equivalent)
+  - Stores: default model, model aliases, cached models list
+- **Templates**: `~/.config/rullm/templates/*.toml`
+- **API keys**: Stored in system keychain via `api_keys.rs`
+
+## Important Notes
+
+- The project uses Rust edition 2024 (rust-version 1.85+)
+- Model separator changed from `/` to `:` (e.g., `openai:gpt-4` not `openai/gpt-4`)
+- Chat history is persisted in `~/.config/rullm/chat_history/`
+- The CLI uses `reedline` for advanced REPL features (syntax highlighting, history, multiline editing)
+- In chat mode: Alt+Enter for multiline, Ctrl+O for buffer editing, `/edit` to open $EDITOR
