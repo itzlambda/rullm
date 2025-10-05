@@ -53,10 +53,17 @@ pub struct OpenAICompatibleProvider {
 
 impl OpenAICompatibleProvider {
     /// Create a new OpenAI-compatible provider with custom identity
-    pub fn new(config: crate::config::OpenAICompatibleConfig, identity: ProviderIdentity) -> Result<Self, LlmError> {
+    pub fn new(
+        config: crate::config::OpenAICompatibleConfig,
+        identity: ProviderIdentity,
+    ) -> Result<Self, LlmError> {
         config.validate()?;
         let client = Client::new();
-        Ok(Self { config, client, identity })
+        Ok(Self {
+            config,
+            client,
+            identity,
+        })
     }
 
     /// Create an OpenAI provider

@@ -193,11 +193,10 @@ pub fn create_client(
             base_url,
             simple_config,
         ),
-        Provider::OpenRouter => create_provider_client::<OpenAICompatibleConfig, OpenRouterConfigBuilder>(
-            api_key,
-            base_url,
-            simple_config,
-        ),
+        Provider::OpenRouter => create_provider_client::<
+            OpenAICompatibleConfig,
+            OpenRouterConfigBuilder,
+        >(api_key, base_url, simple_config),
         Provider::Anthropic => create_provider_client::<AnthropicConfig, AnthropicConfigBuilder>(
             api_key,
             base_url,

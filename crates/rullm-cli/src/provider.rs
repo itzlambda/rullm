@@ -26,7 +26,13 @@ impl std::fmt::Display for Provider {
 
 impl ValueEnum for Provider {
     fn value_variants<'a>() -> &'a [Self] {
-        &[Self::OpenAI, Self::Groq, Self::OpenRouter, Self::Anthropic, Self::Google]
+        &[
+            Self::OpenAI,
+            Self::Groq,
+            Self::OpenRouter,
+            Self::Anthropic,
+            Self::Google,
+        ]
     }
 
     fn to_possible_value(&self) -> Option<PossibleValue> {

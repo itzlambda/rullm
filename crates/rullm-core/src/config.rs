@@ -325,9 +325,7 @@ impl ProviderConfig for OpenAICompatibleConfig {
 
     fn validate(&self) -> Result<(), crate::error::LlmError> {
         if self.api_key.is_empty() {
-            return Err(crate::error::LlmError::configuration(
-                "API key is required",
-            ));
+            return Err(crate::error::LlmError::configuration("API key is required"));
         }
 
         // Relaxed validation: don't require 'sk-' prefix since Groq and OpenRouter use different formats

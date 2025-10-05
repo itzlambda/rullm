@@ -5,7 +5,9 @@
 
 use crate::config::{AnthropicConfig, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig};
 use crate::error::LlmError;
-use crate::providers::{AnthropicProvider, GoogleProvider, GroqProvider, OpenAIProvider, OpenRouterProvider};
+use crate::providers::{
+    AnthropicProvider, GoogleProvider, GroqProvider, OpenAIProvider, OpenRouterProvider,
+};
 use crate::types::{
     ChatCompletion, ChatMessage, ChatRequest, ChatRole, ChatStreamEvent, LlmProvider,
 };

@@ -9,5 +9,5 @@ pub use anthropic::AnthropicProvider;
 pub use google::GoogleProvider;
 pub use groq::GroqProvider;
 pub use openai::OpenAIProvider;
-pub use openai_compatible::{identities, OpenAICompatibleProvider, ProviderIdentity};
+pub use openai_compatible::{OpenAICompatibleProvider, ProviderIdentity, identities};
 pub use openrouter::OpenRouterProvider;

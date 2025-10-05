@@ -1,5 +1,5 @@
 use crate::error::LlmError;
-use crate::providers::openai_compatible::{identities, OpenAICompatibleProvider};
+use crate::providers::openai_compatible::{OpenAICompatibleProvider, identities};
 use crate::types::{
     ChatCompletion, ChatRequest, ChatResponse, ChatStreamEvent, LlmProvider, StreamConfig,
     StreamResult,
@@ -61,7 +61,9 @@ impl ChatCompletion for OpenRouterProvider {
         model: &str,
         config: Option<StreamConfig>,
     ) -> StreamResult<ChatStreamEvent> {
-        self.inner.chat_completion_stream(request, model, config).await
+        self.inner
+            .chat_completion_stream(request, model, config)
+            .await
     }
 
     async fn estimate_tokens(&self, text: &str, model: &str) -> Result<u32, LlmError> {
