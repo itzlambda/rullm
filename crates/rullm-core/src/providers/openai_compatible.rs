@@ -1,12 +1,12 @@
+use crate::compat_types::{
+    ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, TokenUsage,
+};
 use crate::config::ProviderConfig;
 use crate::error::LlmError;
-use crate::types::{
-    ChatCompletion, ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, LlmProvider,
-    StreamConfig, StreamResult, TokenUsage,
-};
 use crate::utils::sse::sse_lines;
 use futures::StreamExt;
 use reqwest::Client;
+use std::pin::Pin;
 
 /// Provider identity metadata
 #[derive(Debug, Clone)]
@@ -193,30 +193,11 @@ impl OpenAICompatibleProvider {
             model,
             usage: token_usage,
             finish_reason,
-            provider_metadata: None,
         })
     }
-}
 
-#[async_trait::async_trait]
-impl LlmProvider for OpenAICompatibleProvider {
-    fn name(&self) -> &'static str {
-        self.identity.name
-    }
-
-    fn aliases(&self) -> &'static [&'static str] {
-        self.identity.aliases
-    }
-
-    fn env_key(&self) -> &'static str {
-        self.identity.env_key
-    }
-
-    fn default_base_url(&self) -> Option<&'static str> {
-        Some(self.identity.default_base_url)
-    }
-
-    async fn available_models(&self) -> Result<Vec<String>, LlmError> {
+    /// Get list of available models
+    pub async fn available_models(&self) -> Result<Vec<String>, LlmError> {
         let url = format!("{}/models", self.config.base_url());
 
         let mut req = self.client.get(&url);
@@ -270,7 +251,8 @@ impl LlmProvider for OpenAICompatibleProvider {
         Ok(models)
     }
 
-    async fn health_check(&self) -> Result<(), LlmError> {
+    /// Health check
+    pub async fn health_check(&self) -> Result<(), LlmError> {
         let url = format!("{}/models", self.config.base_url());
 
         let mut req = self.client.get(&url);
@@ -290,11 +272,9 @@ impl LlmProvider for OpenAICompatibleProvider {
             ))
         }
     }
-}
 
-#[async_trait::async_trait]
-impl ChatCompletion for OpenAICompatibleProvider {
-    async fn chat_completion(
+    /// Chat completion
+    pub async fn chat_completion(
         &self,
         request: ChatRequest,
         model: &str,
@@ -331,12 +311,13 @@ impl ChatCompletion for OpenAICompatibleProvider {
         self.parse_openai_response(response_json)
     }
 
-    async fn chat_completion_stream(
+    /// Chat completion stream
+    pub async fn chat_completion_stream(
         &self,
         request: ChatRequest,
         model: &str,
-        _config: Option<StreamConfig>,
-    ) -> StreamResult<ChatStreamEvent> {
+        _buffer_size: Option<usize>,
+    ) -> Pin<Box<dyn futures::Stream<Item = Result<ChatStreamEvent, LlmError>> + Send>> {
         let url = format!("{}/chat/completions", self.config.base_url());
 
         // Create streaming request with stream: true
@@ -432,12 +413,6 @@ impl ChatCompletion for OpenAICompatibleProvider {
             // Emit Done event when streaming completes
             yield Ok(ChatStreamEvent::Done);
         })
-    }
-
-    async fn estimate_tokens(&self, text: &str, _model: &str) -> Result<u32, LlmError> {
-        // Simple estimation: approximately 4 characters per token for English text
-        // This is a rough approximation - in production you'd want to use tiktoken or similar
-        Ok((text.len() as f32 / 4.0).ceil() as u32)
     }
 }
 

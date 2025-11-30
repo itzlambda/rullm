@@ -1,7 +1,6 @@
+use crate::cli_client::CliClient;
 use anyhow::Result;
 use owo_colors::OwoColorize;
-use rullm_core::simple::SimpleLlmClient;
-use rullm_core::types::ChatRole;
 
 #[derive(Debug, Clone)]
 pub enum SlashCommand {
@@ -59,8 +58,8 @@ pub enum HandleCommandResult {
 
 pub async fn handle_slash_command(
     command: SlashCommand,
-    conversation: &mut Vec<(ChatRole, String)>,
-    _client: &SimpleLlmClient,
+    conversation: &mut Vec<(String, String)>,
+    _client: &CliClient,
 ) -> Result<HandleCommandResult> {
     match command {
         SlashCommand::System(msg) => {
@@ -68,8 +67,8 @@ pub async fn handle_slash_command(
                 println!("{}", "Usage: /system <message>".yellow());
                 return Ok(HandleCommandResult::NoOp);
             }
-            conversation.retain(|(role, _)| *role != ChatRole::System);
-            conversation.insert(0, (ChatRole::System, msg.clone()));
+            conversation.retain(|(role, _)| role != "system");
+            conversation.insert(0, ("system".to_string(), msg.clone()));
             println!(
                 "{} {} {} {}",
                 "System".green().bold(),

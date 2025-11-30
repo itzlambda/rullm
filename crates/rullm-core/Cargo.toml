@@ -61,11 +61,3 @@ path = "examples/openai_conversation.rs"
 [[example]]
 name = "basic_usage"
 path = "examples/basic_usage.rs"
-
-[[example]]
-name = "middleware_usage"
-path = "examples/middleware_usage.rs"
-
-[[example]]
-name = "simple_usage"
-path = "examples/simple_usage.rs"
