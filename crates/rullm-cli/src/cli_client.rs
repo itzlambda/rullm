@@ -11,19 +11,10 @@ use rullm_core::providers::{AnthropicClient, GoogleClient, OpenAIClient};
 use std::pin::Pin;
 
 /// Simple configuration for CLI adapter
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CliConfig {
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
-}
-
-impl Default for CliConfig {
-    fn default() -> Self {
-        Self {
-            temperature: None,
-            max_tokens: None,
-        }
-    }
 }
 
 /// CLI adapter enum that wraps concrete provider clients
@@ -347,18 +338,11 @@ impl CliClient {
                 let stream = client.messages_stream(request).await?;
                 Ok(Box::pin(stream.filter_map(|event_result| async move {
                     match event_result {
-                        Ok(event) => match event {
-                            rullm_core::providers::anthropic::StreamEvent::ContentBlockDelta {
-                                delta,
-                                ..
-                            } => match delta {
-                                rullm_core::providers::anthropic::Delta::TextDelta { text } => {
-                                    Some(Ok(text))
-                                }
-                                _ => None,
-                            },
-                            _ => None,
-                        },
+                        Ok(rullm_core::providers::anthropic::StreamEvent::ContentBlockDelta {
+                            delta: rullm_core::providers::anthropic::Delta::TextDelta { text },
+                            ..
+                        }) => Some(Ok(text)),
+                        Ok(_) => None,
                         Err(e) => Some(Err(e)),
                     }
                 })))

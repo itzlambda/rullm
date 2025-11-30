@@ -186,7 +186,7 @@ impl GoogleClient {
             .filter_map(|m| {
                 m.get("name")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.split('/').last().unwrap_or(s).to_string())
+                    .map(|s| s.split('/').next_back().unwrap_or(s).to_string())
             })
             .collect();
 
