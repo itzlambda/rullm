@@ -13,20 +13,20 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod alias;
+pub mod auth;
 pub mod chat;
 pub mod completions;
 pub mod info;
 pub mod templates;
 
-pub mod keys;
 pub mod models;
 
 // Re-export the command args structs
 pub use alias::AliasArgs;
+pub use auth::AuthArgs;
 pub use chat::ChatArgs;
 pub use completions::CompletionsArgs;
 pub use info::InfoArgs;
-pub use keys::KeysArgs;
 pub use models::ModelsArgs;
 
 // Example strings for after_long_help
@@ -42,11 +42,11 @@ const MODELS_EXAMPLES: &str = r#"EXAMPLES:
   rullm models default openai/gpt-4o       # Set default model
   rullm models clear                       # Clear model cache"#;
 
-const KEYS_EXAMPLES: &str = r#"EXAMPLES:
-  rullm keys set openai                    # Set OpenAI API key (prompted)
-  rullm keys set anthropic -k sk-ant-...  # Set Anthropic key directly
-  rullm keys list                          # Show which providers have keys
-  rullm keys delete google                 # Remove Google API key"#;
+const AUTH_EXAMPLES: &str = r#"EXAMPLES:
+  rullm auth login                         # Login interactively
+  rullm auth login anthropic               # Login to Anthropic (OAuth or API key)
+  rullm auth logout openai                 # Logout from OpenAI
+  rullm auth list                          # Show all credentials"#;
 
 const ALIAS_EXAMPLES: &str = r#"EXAMPLES:
   rullm alias list                         # Show all available aliases
@@ -73,9 +73,9 @@ pub enum Commands {
     /// Show configuration and system information
     #[command(after_long_help = INFO_EXAMPLES)]
     Info(InfoArgs),
-    /// Manage API keys
-    #[command(after_long_help = KEYS_EXAMPLES)]
-    Keys(KeysArgs),
+    /// Manage authentication credentials
+    #[command(after_long_help = AUTH_EXAMPLES)]
+    Auth(AuthArgs),
     /// Manage model aliases
     #[command(after_long_help = ALIAS_EXAMPLES)]
     Alias(AliasArgs),

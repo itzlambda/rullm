@@ -32,6 +32,16 @@ chrono.workspace = true
 reedline.workspace = true
 tempfile.workspace = true
 
+# OAuth dependencies
+sha2 = "0.10"
+rand = "0.9"
+base64 = "0.22"
+webbrowser = "1.0"
+reqwest = { version = "0.12", features = ["json"] }
+serde_urlencoded = "0.7"
+urlencoding = "2.1"
+hex = "0.4"
+
 [dev-dependencies]
 tempfile.workspace = true
 

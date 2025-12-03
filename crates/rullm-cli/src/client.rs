@@ -1,7 +1,6 @@
 use super::provider::Provider;
-use crate::api_keys::ApiKeys;
 use crate::args::{Cli, CliConfig};
-use crate::constants;
+use crate::auth;
 use anyhow::{Context, Result};
 
 use rullm_core::simple::{SimpleLlmBuilder, SimpleLlmClient, SimpleLlmConfig};
@@ -222,13 +221,13 @@ pub fn from_model(model_str: &str, cli: &Cli, cli_config: &CliConfig) -> Result<
         .resolve(model_str)
         .context("Invalid model format")?;
 
-    let api_key = ApiKeys::get_api_key(&provider, &cli_config.api_keys).ok_or_else(|| {
+    let token = auth::get_token(&provider, &cli_config.auth_config).ok_or_else(|| {
         anyhow::anyhow!(
-            "API key required. Set {} environment variable or add it to {} in config directory",
-            provider.env_key(),
-            constants::CONFIG_FILE_NAME
+            "Credentials required. Run 'rullm auth login {}' or set {} environment variable",
+            provider,
+            provider.env_key()
         )
     })?;
 
-    create_client(&provider, &api_key, None, cli, &model_name).map_err(anyhow::Error::from)
+    create_client(&provider, &token, None, cli, &model_name).map_err(anyhow::Error::from)
 }

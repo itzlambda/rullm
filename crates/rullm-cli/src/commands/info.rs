@@ -3,6 +3,7 @@ use clap::Args;
 
 use crate::{
     args::{Cli, CliConfig},
+    auth,
     commands::env_var_status,
     constants::*,
     output::OutputLevel,
@@ -22,7 +23,7 @@ impl InfoArgs {
     ) -> Result<()> {
         let config_path = cli_config.config_base_path.join(CONFIG_FILE_NAME);
         let models_path = cli_config.data_base_path.join(MODEL_FILE_NAME);
-        let keys_path = cli_config.config_base_path.join(KEYS_CONFIG_FILE);
+        let auth_path = auth::auth_config_path(&cli_config.config_base_path);
         let templates_path = cli_config.config_base_path.join(TEMPLATES_DIR_NAME);
 
         // crate::output::heading("Config files:", output_level);
@@ -30,7 +31,7 @@ impl InfoArgs {
             &format!("config file: {}", config_path.display()),
             output_level,
         );
-        crate::output::note(&format!("keys file: {}", keys_path.display()), output_level);
+        crate::output::note(&format!("auth file: {}", auth_path.display()), output_level);
         crate::output::note(
             &format!("models cache file: {}", models_path.display()),
             output_level,
