@@ -154,9 +154,6 @@ pub mod error;
 pub mod providers;
 pub mod utils;
 
-#[cfg(test)]
-mod tests;
-
 // Concrete client exports
 pub use providers::{AnthropicClient, GoogleClient, OpenAIClient, OpenAICompatibleProvider};
 

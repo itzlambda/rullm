@@ -1,8 +1,7 @@
 use super::provider::Provider;
-use crate::api_keys::ApiKeys;
 use crate::args::{Cli, CliConfig};
+use crate::auth;
 use crate::cli_client::{CliClient, CliConfig as CoreCliConfig};
-use crate::constants;
 use anyhow::{Context, Result};
 
 use rullm_core::LlmError;
@@ -45,25 +44,42 @@ pub fn create_client(
     }
 }
 
-/// Create a CliClient from a model string, CLI arguments, and configuration
-/// This is the promoted version of the create_client_from_model closure from lib.rs
-pub fn from_model(model_str: &str, cli: &Cli, cli_config: &CliConfig) -> Result<CliClient> {
+/// Create a CliClient from a model string, CLI arguments, and configuration.
+///
+/// This function handles OAuth token refresh automatically if the token is expired.
+/// The `cli_config` is mutable because refreshing a token requires saving the new credential.
+pub async fn from_model(
+    model_str: &str,
+    cli: &Cli,
+    cli_config: &mut CliConfig,
+) -> Result<CliClient> {
     // Use the global alias resolver for CLI functionality
-    let resolver = crate::aliases::get_global_alias_resolver(&cli_config.config_base_path);
-    let resolver = resolver
-        .read()
-        .map_err(|_| anyhow::anyhow!("Failed to acquire read lock on global resolver"))?;
-    let (provider, model_name) = resolver
-        .resolve(model_str)
-        .context("Invalid model format")?;
+    // Resolve provider and model inside a block so the lock is dropped before the await
+    let (provider, model_name) = {
+        let resolver = crate::aliases::get_global_alias_resolver(&cli_config.config_base_path);
+        let resolver = resolver
+            .read()
+            .map_err(|_| anyhow::anyhow!("Failed to acquire read lock on global resolver"))?;
+        resolver
+            .resolve(model_str)
+            .context("Invalid model format")?
+    };
 
-    let api_key = ApiKeys::get_api_key(&provider, &cli_config.api_keys).ok_or_else(|| {
+    // Get token with automatic refresh for OAuth
+    let token = auth::get_or_refresh_token(
+        &provider,
+        &mut cli_config.auth_config,
+        &cli_config.config_base_path,
+    )
+    .await
+    .map_err(|e| {
         anyhow::anyhow!(
-            "API key required. Set {} environment variable or add it to {} in config directory",
-            provider.env_key(),
-            constants::CONFIG_FILE_NAME
+            "{}. Run 'rullm auth login {}' or set {} environment variable",
+            e,
+            provider,
+            provider.env_key()
         )
     })?;
 
-    create_client(&provider, &api_key, None, cli, &model_name).map_err(anyhow::Error::from)
+    create_client(&provider, &token, None, cli, &model_name).map_err(anyhow::Error::from)
 }

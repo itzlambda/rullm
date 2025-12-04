@@ -76,7 +76,7 @@ impl ModelsArgs {
                     let provider = format!("{provider}");
                     // Try to create a client for this provider
                     let model_hint = format!("{provider}:dummy"); // dummy model name, just to get the client
-                    let client = match client::from_model(&model_hint, cli, cli_config) {
+                    let client = match client::from_model(&model_hint, cli, cli_config).await {
                         Ok(c) => c,
                         Err(_) => {
                             skipped.push(provider);
