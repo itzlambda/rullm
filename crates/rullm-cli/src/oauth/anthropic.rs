@@ -27,7 +27,9 @@ impl Default for AnthropicOAuth {
     fn default() -> Self {
         Self {
             authorization_url: "https://console.anthropic.com/oauth/authorize",
-            token_url: "https://api.anthropic.com/oauth/token",
+            // The token endpoint lives on the console domain (not the public API)
+            // and requires the `/v1` prefix; posting to the API host returns 404.
+            token_url: "https://console.anthropic.com/v1/oauth/token",
             client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
             callback_port: 8765,
             scopes: &["org:create_api_key", "user:profile", "user:inference"],
@@ -61,6 +63,8 @@ struct TokenRequest<'a> {
     code: &'a str,
     redirect_uri: &'a str,
     code_verifier: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state: Option<&'a str>,
 }
 
 impl AnthropicOAuth {
@@ -70,15 +74,19 @@ impl AnthropicOAuth {
     }
 
     /// Build the authorization URL for the OAuth flow.
-    pub fn build_authorization_url(&self, pkce: &PkceChallenge, state: &str) -> String {
-        let redirect_uri = format!("http://localhost:{}/callback", self.callback_port);
+    fn build_authorization_url(
+        &self,
+        pkce: &PkceChallenge,
+        state: &str,
+        redirect_uri: &str,
+    ) -> String {
         let scope = self.scopes.join(" ");
 
         format!(
             "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&code_challenge={}&code_challenge_method={}&state={}",
             self.authorization_url,
             urlencoding::encode(self.client_id),
-            urlencoding::encode(&redirect_uri),
+            urlencoding::encode(redirect_uri),
             urlencoding::encode(&scope),
             urlencoding::encode(&pkce.challenge),
             pkce.method(),
@@ -101,11 +109,13 @@ impl AnthropicOAuth {
         let state = generate_state();
 
         // Start callback server
-        let server = CallbackServer::new(self.callback_port)
-            .context("Failed to start callback server")?;
+        let server =
+            CallbackServer::new(self.callback_port).context("Failed to start callback server")?;
+
+        let redirect_uri = server.redirect_uri();
 
         // Build and open authorization URL
-        let auth_url = self.build_authorization_url(&pkce, &state);
+        let auth_url = self.build_authorization_url(&pkce, &state, &redirect_uri);
 
         println!("Opening browser for Anthropic authentication...");
         webbrowser::open(&auth_url).context("Failed to open browser")?;
@@ -123,28 +133,40 @@ impl AnthropicOAuth {
         }
 
         // Exchange code for tokens
-        let credential = self.exchange_code(&callback.code, &pkce.verifier).await?;
+        let credential = self
+            .exchange_code(
+                &callback.code,
+                &pkce.verifier,
+                &redirect_uri,
+                callback.state.as_deref(),
+            )
+            .await?;
 
         Ok(credential)
     }
 
     /// Exchange authorization code for tokens.
-    async fn exchange_code(&self, code: &str, code_verifier: &str) -> Result<Credential> {
-        let redirect_uri = format!("http://localhost:{}/callback", self.callback_port);
-
+    async fn exchange_code(
+        &self,
+        code: &str,
+        code_verifier: &str,
+        redirect_uri: &str,
+        state: Option<&str>,
+    ) -> Result<Credential> {
         let request_body = TokenRequest {
             grant_type: "authorization_code",
             client_id: self.client_id,
             code,
-            redirect_uri: &redirect_uri,
+            redirect_uri,
             code_verifier,
+            state,
         };
 
         let client = reqwest::Client::new();
         let response = client
             .post(self.token_url)
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(serde_urlencoded::to_string(&request_body)?)
+            // Anthropic expects JSON payloads for the token exchange.
+            .json(&request_body)
             .send()
             .await
             .context("Failed to send token request")?;
@@ -184,8 +206,7 @@ impl AnthropicOAuth {
         let client = reqwest::Client::new();
         let response = client
             .post(self.token_url)
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(serde_urlencoded::to_string(&request_body)?)
+            .json(&request_body)
             .send()
             .await
             .context("Failed to send refresh request")?;
@@ -231,8 +252,9 @@ mod tests {
         let oauth = AnthropicOAuth::new();
         let pkce = PkceChallenge::generate();
         let state = "test-state";
+        let redirect_uri = "http://localhost:8765/callback";
 
-        let url = oauth.build_authorization_url(&pkce, state);
+        let url = oauth.build_authorization_url(&pkce, state, redirect_uri);
 
         assert!(url.starts_with("https://console.anthropic.com/oauth/authorize"));
         assert!(url.contains("response_type=code"));

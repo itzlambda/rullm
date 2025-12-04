@@ -209,9 +209,15 @@ pub fn create_client(
     }
 }
 
-/// Create a SimpleLlmClient from a model string, CLI arguments, and configuration
-/// This is the promoted version of the create_client_from_model closure from lib.rs
-pub fn from_model(model_str: &str, cli: &Cli, cli_config: &CliConfig) -> Result<SimpleLlmClient> {
+/// Create a SimpleLlmClient from a model string, CLI arguments, and configuration.
+///
+/// This function handles OAuth token refresh automatically if the token is expired.
+/// The `cli_config` is mutable because refreshing a token requires saving the new credential.
+pub async fn from_model(
+    model_str: &str,
+    cli: &Cli,
+    cli_config: &mut CliConfig,
+) -> Result<SimpleLlmClient> {
     // Use the global alias resolver for CLI functionality
     let resolver = crate::aliases::get_global_alias_resolver(&cli_config.config_base_path);
     let resolver = resolver
@@ -221,9 +227,17 @@ pub fn from_model(model_str: &str, cli: &Cli, cli_config: &CliConfig) -> Result<
         .resolve(model_str)
         .context("Invalid model format")?;
 
-    let token = auth::get_token(&provider, &cli_config.auth_config).ok_or_else(|| {
+    // Get token with automatic refresh for OAuth
+    let token = auth::get_or_refresh_token(
+        &provider,
+        &mut cli_config.auth_config,
+        &cli_config.config_base_path,
+    )
+    .await
+    .map_err(|e| {
         anyhow::anyhow!(
-            "Credentials required. Run 'rullm auth login {}' or set {} environment variable",
+            "{}. Run 'rullm auth login {}' or set {} environment variable",
+            e,
             provider,
             provider.env_key()
         )

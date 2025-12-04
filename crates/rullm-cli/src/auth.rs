@@ -55,11 +55,6 @@ impl Credential {
         }
     }
 
-    /// Check if this is an OAuth credential
-    pub fn is_oauth(&self) -> bool {
-        matches!(self, Self::OAuth { .. })
-    }
-
     /// Check if an OAuth token is expired or about to expire
     pub fn is_expired(&self) -> bool {
         match self {
@@ -144,8 +139,8 @@ impl AuthConfig {
                 .with_context(|| format!("Failed to create directory {}", parent.display()))?;
         }
 
-        let content = toml::to_string_pretty(self)
-            .with_context(|| "Failed to serialize auth config")?;
+        let content =
+            toml::to_string_pretty(self).with_context(|| "Failed to serialize auth config")?;
 
         fs::write(path, &content)
             .with_context(|| format!("Failed to write auth config to {}", path.display()))?;
@@ -193,11 +188,6 @@ impl AuthConfig {
     pub fn remove(&mut self, provider: &Provider) {
         *self.get_mut(provider) = None;
     }
-
-    /// Check if a provider has a credential configured
-    pub fn has(&self, provider: &Provider) -> bool {
-        self.get(provider).is_some()
-    }
 }
 
 /// Get the auth config file path
@@ -222,10 +212,7 @@ pub struct CredentialInfo {
 /// Get credential for a provider, checking file first, then environment variable.
 ///
 /// File credentials take precedence over environment variables.
-pub fn get_credential(
-    provider: &Provider,
-    auth_config: &AuthConfig,
-) -> Option<CredentialInfo> {
+pub fn get_credential(provider: &Provider, auth_config: &AuthConfig) -> Option<CredentialInfo> {
     // Check file credentials first (higher precedence)
     if let Some(cred) = auth_config.get(provider) {
         return Some(CredentialInfo {
@@ -246,9 +233,70 @@ pub fn get_credential(
     None
 }
 
-/// Get just the token string for a provider (for backward compatibility).
-pub fn get_token(provider: &Provider, auth_config: &AuthConfig) -> Option<String> {
-    get_credential(provider, auth_config).map(|info| info.credential.get_token().to_string())
+/// Get token for a provider, automatically refreshing OAuth tokens if expired.
+///
+/// This is the preferred method for getting tokens as it handles expiration.
+/// If the token is refreshed, the new credential is saved to the config file.
+pub async fn get_or_refresh_token(
+    provider: &Provider,
+    auth_config: &mut AuthConfig,
+    config_base_path: &Path,
+) -> Result<String> {
+    // Get credential info
+    let info = get_credential(provider, auth_config)
+        .ok_or_else(|| anyhow::anyhow!("No credential found for {}", provider))?;
+
+    // If from environment, just return the token (can't refresh env vars)
+    if matches!(info.source, CredentialSource::Environment(_)) {
+        return Ok(info.credential.get_token().to_string());
+    }
+
+    // Check if OAuth token is expired
+    if info.credential.is_expired() {
+        if let Some(refresh_tok) = info.credential.refresh_token() {
+            // Attempt to refresh
+            eprintln!("OAuth token expired, refreshing...");
+            match refresh_oauth_token(provider, refresh_tok).await {
+                Ok(new_credential) => {
+                    let token = new_credential.get_token().to_string();
+                    auth_config.set(provider, new_credential);
+                    auth_config.save(config_base_path)?;
+                    eprintln!("Token refreshed successfully.");
+                    return Ok(token);
+                }
+                Err(e) => {
+                    // Refresh failed - user needs to re-authenticate
+                    return Err(anyhow::anyhow!(
+                        "OAuth token expired and refresh failed: {}. Please run 'rullm auth login {}'",
+                        e,
+                        provider
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(info.credential.get_token().to_string())
+}
+
+/// Refresh an OAuth token for a specific provider.
+async fn refresh_oauth_token(provider: &Provider, refresh_token: &str) -> Result<Credential> {
+    use crate::oauth::{anthropic::AnthropicOAuth, openai::OpenAIOAuth};
+
+    match provider {
+        Provider::Anthropic => {
+            let oauth = AnthropicOAuth::new();
+            oauth.refresh_token(refresh_token).await
+        }
+        Provider::OpenAI => {
+            let oauth = OpenAIOAuth::new();
+            oauth.refresh_token(refresh_token).await
+        }
+        _ => Err(anyhow::anyhow!(
+            "Provider {} does not support OAuth token refresh",
+            provider
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -263,7 +311,7 @@ mod tests {
             "refresh".to_string(),
             u64::MAX, // Far future
         );
-        assert!(cred.is_oauth());
+        assert!(matches!(cred, Credential::OAuth { .. }));
         assert_eq!(cred.get_token(), "access");
         assert_eq!(cred.refresh_token(), Some("refresh"));
         assert!(!cred.is_expired());
@@ -272,7 +320,7 @@ mod tests {
     #[test]
     fn test_credential_api() {
         let cred = Credential::api("sk-test-key".to_string());
-        assert!(!cred.is_oauth());
+        assert!(matches!(cred, Credential::Api { .. }));
         assert_eq!(cred.get_token(), "sk-test-key");
         assert_eq!(cred.refresh_token(), None);
         assert!(!cred.is_expired());

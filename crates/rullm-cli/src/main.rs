@@ -81,7 +81,7 @@ pub async fn run() -> Result<()> {
 
     // Handle commands
     match &cli.command {
-        Some(Commands::Chat(args)) => args.run(output_level, &cli_config, &cli).await?,
+        Some(Commands::Chat(args)) => args.run(output_level, &mut cli_config, &cli).await?,
         Some(Commands::Models(args)) => args.run(output_level, &mut cli_config, &cli).await?,
         Some(Commands::Info(args)) => args.run(output_level, &cli_config, &cli).await?,
         Some(Commands::Auth(args)) => args.run(output_level, &cli_config.config_base_path).await?,
@@ -92,7 +92,7 @@ pub async fn run() -> Result<()> {
             if let Some(query) = &cli.query {
                 let model_str =
                     resolve_direct_query_model(&cli.model, &cli_config.config.default_model)?;
-                let client = client::from_model(&model_str, &cli, &cli_config)?;
+                let client = client::from_model(&model_str, &cli, &mut cli_config).await?;
 
                 // Handle template if provided
                 let (system_prompt, final_query) = if let Some(template_name) = &cli.template {

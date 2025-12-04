@@ -26,8 +26,8 @@ impl CallbackServer {
     /// Create a new callback server on the specified port.
     pub fn new(port: u16) -> Result<Self> {
         let addr = format!("127.0.0.1:{port}");
-        let listener = TcpListener::bind(&addr)
-            .with_context(|| format!("Failed to bind to {addr}"))?;
+        let listener =
+            TcpListener::bind(&addr).with_context(|| format!("Failed to bind to {addr}"))?;
 
         // Get the actual port if 0 was specified
         let actual_port = listener.local_addr()?.port();
@@ -41,6 +41,16 @@ impl CallbackServer {
     /// Get the redirect URI for this callback server.
     pub fn redirect_uri(&self) -> String {
         format!("http://localhost:{}/callback", self.port)
+    }
+
+    /// Build a redirect URI using a custom path (must start with '/').
+    pub fn redirect_uri_with_path(&self, path: &str) -> String {
+        let normalized = if path.starts_with('/') {
+            path.to_string()
+        } else {
+            format!("/{}", path)
+        };
+        format!("http://localhost:{}{}", self.port, normalized)
     }
 
     /// Wait for the OAuth callback and extract the authorization code.
@@ -208,10 +218,7 @@ mod tests {
             CallbackServer::extract_query_param(path, "state"),
             Some("def".to_string())
         );
-        assert_eq!(
-            CallbackServer::extract_query_param(path, "missing"),
-            None
-        );
+        assert_eq!(CallbackServer::extract_query_param(path, "missing"), None);
     }
 
     #[test]

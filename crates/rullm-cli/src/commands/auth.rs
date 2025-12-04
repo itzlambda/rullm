@@ -114,10 +114,7 @@ impl AuthArgs {
                 auth_config.remove(&provider);
                 auth_config.save(config_base_path)?;
 
-                crate::output::success(
-                    &format!("Logged out from {provider}"),
-                    output_level,
-                );
+                crate::output::success(&format!("Logged out from {provider}"), output_level);
             }
 
             AuthAction::List => {
@@ -147,9 +144,10 @@ fn select_provider() -> Result<Provider> {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
-    let choice: usize = input.trim().parse().map_err(|_| {
-        anyhow::anyhow!("Invalid selection")
-    })?;
+    let choice: usize = input
+        .trim()
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid selection"))?;
 
     if choice == 0 || choice > providers.len() {
         anyhow::bail!("Invalid selection");
@@ -212,7 +210,7 @@ fn format_provider_display(provider: &Provider) -> &'static str {
 }
 
 /// Print the credentials list in a nice format.
-fn print_credentials_list(auth_config: &AuthConfig, _output_level: OutputLevel) {
+fn print_credentials_list(auth_config: &AuthConfig, output_level: OutputLevel) {
     let mut file_creds: Vec<(Provider, String)> = Vec::new();
     let mut env_creds: Vec<(Provider, String)> = Vec::new();
 
@@ -231,46 +229,68 @@ fn print_credentials_list(auth_config: &AuthConfig, _output_level: OutputLevel) 
 
     // Print file credentials section
     if !file_creds.is_empty() {
+        let base_strategy = etcetera::choose_base_strategy().unwrap();
         let config_path = auth::auth_config_path(
-            &etcetera::choose_base_strategy()
-                .unwrap()
+            &base_strategy
                 .config_dir()
                 .join(crate::constants::BINARY_NAME),
         );
-        println!("\n\u{250c}  Credentials {}", config_path.display());
-        println!("\u{2502}");
+
+        // Display path with ~ for home directory
+        let display_path = config_path
+            .strip_prefix(base_strategy.home_dir())
+            .map(|p| format!("~/{}", p.display()))
+            .unwrap_or_else(|_| config_path.display().to_string());
+
+        crate::output::heading(&format!("Credentials ({display_path}):"), output_level);
 
         for (provider, cred_type) in &file_creds {
-            println!(
-                "\u{25cf}  {} {}",
-                format_provider_display(provider),
-                cred_type
+            crate::output::note(
+                &format!(
+                    "  {}: {}",
+                    crate::output::format_provider(format_provider_display(provider)),
+                    cred_type
+                ),
+                output_level,
             );
-            println!("\u{2502}");
         }
-
-        println!("\u{2514}  {} credentials", file_creds.len());
     }
 
     // Print environment variables section
     if !env_creds.is_empty() {
-        println!("\n\u{250c}  Environment");
-        println!("\u{2502}");
+        if !file_creds.is_empty() {
+            crate::output::note("", output_level);
+        }
+        crate::output::heading("Environment variables:", output_level);
 
         for (provider, env_key) in &env_creds {
-            println!(
-                "\u{25cf}  {} {}",
-                format_provider_display(provider),
-                env_key
+            crate::output::note(
+                &format!(
+                    "  {}: {}",
+                    crate::output::format_provider(format_provider_display(provider)),
+                    env_key
+                ),
+                output_level,
             );
-            println!("\u{2502}");
         }
-
-        println!("\u{2514}  {} environment variables", env_creds.len());
     }
 
-    if file_creds.is_empty() && env_creds.is_empty() {
-        println!("\nNo credentials configured.");
-        println!("Use 'rullm auth login' to add credentials.");
+    // Print summary
+    let total = file_creds.len() + env_creds.len();
+    if total > 0 {
+        crate::output::note("", output_level);
+        crate::output::note(
+            &format!("{} credential(s) configured.", total),
+            output_level,
+        );
+    } else {
+        crate::output::note("No credentials configured.", output_level);
+        crate::output::hint(
+            &format!(
+                "Run {} to add credentials",
+                crate::output::format_command("rullm auth login")
+            ),
+            output_level,
+        );
     }
 }

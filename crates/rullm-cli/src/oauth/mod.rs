@@ -9,4 +9,4 @@ pub mod anthropic;
 pub mod openai;
 
 pub use pkce::PkceChallenge;
-pub use server::{CallbackResult, CallbackServer};
+pub use server::CallbackServer;

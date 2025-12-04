@@ -107,10 +107,6 @@ impl CliConfig {
             auth_config,
         }
     }
-
-    pub fn save_auth_config(&self) -> anyhow::Result<()> {
-        self.auth_config.save(&self.config_base_path)
-    }
 }
 
 #[derive(Parser)]
