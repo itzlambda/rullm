@@ -1,7 +1,8 @@
+use crate::cli_client::CliClient;
 use anyhow::Result;
 use chrono::Utc;
 use clap::{Args, Subcommand};
-use rullm_core::{LlmError, SimpleLlm, SimpleLlmClient};
+use rullm_core::LlmError;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -216,8 +217,8 @@ pub fn clear_models_cache(cli_config: &CliConfig, output_level: OutputLevel) -> 
 }
 
 pub async fn update_models(
-    cli_config: &mut CliConfig,
-    client: &SimpleLlmClient,
+    _cli_config: &mut CliConfig,
+    client: &CliClient,
     output_level: OutputLevel,
 ) -> Result<(), LlmError> {
     crate::output::progress(
@@ -228,26 +229,18 @@ pub async fn update_models(
         output_level,
     );
 
-    match client.models().await {
-        Ok(models) => {
-            crate::output::progress(
-                &format!("Fetched {} models. Caching", models.len()),
-                output_level,
-            );
-            if let Err(e) = cache_models(cli_config, client.provider_name(), &models) {
-                crate::output::error(&format!("Failed to cache: {e}"), output_level);
-            }
-        }
-        Err(e) => {
-            crate::output::error(&format!("Failed to fetch models: {e}"), output_level);
-            return Err(e);
-        }
-    }
-
-    Ok(())
+    // TODO: Implement models() method on CliClient
+    // For now, just return an error
+    crate::output::error(
+        "Fetching models not yet implemented for new client architecture",
+        output_level,
+    );
+    Err(LlmError::unknown(
+        "Models fetching not yet implemented".to_string(),
+    ))
 }
 
-fn cache_models(cli_config: &CliConfig, provider_name: &str, models: &[String]) -> Result<()> {
+fn _cache_models(cli_config: &CliConfig, provider_name: &str, models: &[String]) -> Result<()> {
     use std::fs;
 
     let path = cli_config.data_base_path.join(MODEL_FILE_NAME);

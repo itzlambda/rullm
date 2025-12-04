@@ -1,41 +1,57 @@
-use rullm_core::config::ConfigBuilder;
-use rullm_core::{ChatCompletion, ChatRequestBuilder, LlmProvider, OpenAIProvider};
+use rullm_core::providers::openai::{
+    ChatCompletionRequest, ChatMessage, ContentPart, MessageContent, OpenAIClient,
+};
 use std::io::{self, Write};
+
+// Helper to extract text from MessageContent
+fn extract_text(content: &MessageContent) -> String {
+    match content {
+        MessageContent::Text(text) => text.clone(),
+        MessageContent::Parts(parts) => parts
+            .iter()
+            .filter_map(|part| match part {
+                ContentPart::Text { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(""),
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configure OpenAI provider using ConfigBuilder
-    let config = ConfigBuilder::openai_from_env()?;
-
-    let provider = OpenAIProvider::new(config)?;
+    // Configure OpenAI client from environment
+    let client = OpenAIClient::from_env()?;
 
     // Check available models
     println!("Available models:");
-    match provider.available_models().await {
+    match client.list_models().await {
         Ok(models) => {
-            for model in models {
-                println!("  - {model}");
+            for (i, model) in models.iter().take(10).enumerate() {
+                println!("  {}. {}", i + 1, model);
+            }
+            if models.len() > 10 {
+                println!("  ... and {} more", models.len() - 10);
             }
         }
         Err(e) => println!("Error getting models: {e}"),
     }
 
     // Health check
-    match provider.health_check().await {
-        Ok(_) => println!("✅ Provider is healthy"),
+    match client.health_check().await {
+        Ok(_) => println!("✅ Client is healthy\n"),
         Err(e) => {
             println!("❌ Health check failed: {e}");
             return Ok(());
         }
     }
 
-    println!("\n=== Multi-turn Conversation Example ===");
+    println!("=== Multi-turn Conversation Example ===");
+    println!("Type 'quit' or 'exit' to end the conversation\n");
 
     // Start with system message and context
-    let mut conversation = vec![(
-        "system".to_string(),
-        "You are a helpful programming assistant. Keep responses concise but informative."
-            .to_string(),
+    let mut conversation: Vec<ChatMessage> = vec![ChatMessage::system(
+        "You are a helpful programming assistant. Keep responses concise but informative.",
     )];
 
     // Interactive conversation loop
@@ -51,35 +67,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
 
-        conversation.push(("user".to_string(), user_input.to_string()));
+        conversation.push(ChatMessage::user(user_input));
 
         // Build request from conversation history
-        let mut builder = ChatRequestBuilder::new() // Using faster model for demo
-            .temperature(0.7)
-            .max_tokens(500);
-
-        // Add all messages from conversation
-        for (role, content) in &conversation {
-            match role.as_str() {
-                "system" => builder = builder.system(content),
-                "user" => builder = builder.user(content),
-                "assistant" => builder = builder.assistant(content),
-                "tool" => builder = builder.tool(content),
-                _ => {}
-            }
-        }
-
-        let request = builder.build();
+        let mut request = ChatCompletionRequest::new("gpt-4o-mini", conversation.clone());
+        request.temperature = Some(0.7);
+        request.max_tokens = Some(500);
 
         print!("Assistant: ");
         io::stdout().flush()?;
 
-        match provider.chat_completion(request, "gpt-4o-mini").await {
+        match client.chat_completion(request).await {
             Ok(response) => {
-                println!("{}", response.message.content);
+                let assistant_content = response.choices[0].message.content.as_ref().unwrap();
+
+                // Extract text from MessageContent
+                let assistant_text = match assistant_content {
+                    rullm_core::providers::openai::MessageContent::Text(text) => text.clone(),
+                    rullm_core::providers::openai::MessageContent::Parts(parts) => parts
+                        .iter()
+                        .filter_map(|part| match part {
+                            rullm_core::providers::openai::ContentPart::Text { text } => {
+                                Some(text.as_str())
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join(""),
+                };
+
+                println!("{}", assistant_text);
 
                 // Add assistant response to conversation history
-                conversation.push(("assistant".to_string(), response.message.content.clone()));
+                conversation.push(ChatMessage::assistant(assistant_text));
 
                 // Show token usage
                 println!(
@@ -104,29 +124,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for &model in &models_to_test {
         println!("\n🤖 Testing model: {model}");
 
-        let request = ChatRequestBuilder::new()
-            .system("You are a concise technical writer.")
-            .user(question)
-            .temperature(0.3) // Lower temperature for more consistent responses
-            .max_tokens(100) // Limit response length
-            .top_p(0.9) // Nucleus sampling
-            // .frequency_penalty(0.1) // Reduce repetition
-            // .presence_penalty(0.1) // Encourage diverse topics
-            .build();
+        let mut request = ChatCompletionRequest::new(
+            model,
+            vec![
+                ChatMessage::system("You are a concise technical writer."),
+                ChatMessage::user(question),
+            ],
+        );
+        request.temperature = Some(0.3); // Lower temperature for more consistent responses
+        request.max_tokens = Some(100); // Limit response length
+        request.top_p = Some(0.9); // Nucleus sampling
+        request.frequency_penalty = Some(0.1); // Reduce repetition
+        request.presence_penalty = Some(0.1); // Encourage diverse topics
 
-        match provider.chat_completion(request, model).await {
+        match client.chat_completion(request).await {
             Ok(response) => {
-                println!("Response: {}", response.message.content);
+                println!(
+                    "Response: {}",
+                    extract_text(response.choices[0].message.content.as_ref().unwrap())
+                );
                 println!("Tokens: {}", response.usage.total_tokens);
-
-                // Estimate tokens for the request (useful for cost estimation)
-                match provider
-                    .estimate_tokens(&response.message.content, model)
-                    .await
-                {
-                    Ok(estimated) => println!("Estimated tokens for this text: {estimated}"),
-                    Err(e) => println!("Error estimating tokens: {e}"),
-                }
             }
             Err(e) => {
                 println!("Error with {model}: {e}");
@@ -137,20 +154,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Stop Sequences Example ===");
 
     // Example using stop sequences
-    let request = ChatRequestBuilder::new()
-        .system("You are a code generator. Always end code blocks with '// END'")
-        .user("Write a simple hello world function in Rust")
-        // .stop_sequences(vec!["// END".to_string()]) // Stop generation at this sequence
-        .temperature(0.5)
-        .build();
+    let mut request = ChatCompletionRequest::new(
+        "gpt-3.5-turbo",
+        vec![
+            ChatMessage::system("You are a code generator. Always end code blocks with '// END'"),
+            ChatMessage::user("Write a simple hello world function in Rust"),
+        ],
+    );
+    request.stop = Some(vec!["// END".to_string()]); // Stop generation at this sequence
+    request.temperature = Some(0.5);
 
-    match provider.chat_completion(request, "gpt-3.5-turbo").await {
+    match client.chat_completion(request).await {
         Ok(response) => {
             println!("Code generation (stopped at '// END'):");
-            println!("{}", response.message.content);
-            if let Some(reason) = response.finish_reason {
-                println!("Finish reason: {reason}");
-            }
+            println!(
+                "{}",
+                extract_text(response.choices[0].message.content.as_ref().unwrap())
+            );
+            println!("Finish reason: {}", response.choices[0].finish_reason);
         }
         Err(e) => {
             println!("Error: {e}");

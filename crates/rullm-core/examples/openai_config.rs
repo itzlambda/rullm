@@ -1,9 +1,26 @@
 use rullm_core::config::{OpenAIConfig, ProviderConfig};
-use rullm_core::{ChatCompletion, ChatRequestBuilder, LlmProvider, OpenAIProvider};
+use rullm_core::providers::openai::{
+    ChatCompletionRequest, ChatMessage, ContentPart, MessageContent, OpenAIClient,
+};
+
+// Helper to extract text from MessageContent
+fn extract_text(content: &MessageContent) -> String {
+    match content {
+        MessageContent::Text(text) => text.clone(),
+        MessageContent::Parts(parts) => parts
+            .iter()
+            .filter_map(|part| match part {
+                ContentPart::Text { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(""),
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== OpenAI Provider Configuration Examples ===\n");
+    println!("=== OpenAI Client Configuration Examples ===\n");
 
     // 1. Basic configuration
     println!("1. Basic Configuration:");
@@ -43,46 +60,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(_) => {
                     println!("   ✅ Configuration is valid");
 
-                    // Create provider and test
-                    match OpenAIProvider::new(env_config) {
-                        Ok(provider) => {
-                            println!("   ✅ Provider created successfully");
-                            println!("   Provider name: {}", provider.name());
+                    // Create client and test
+                    match OpenAIClient::new(env_config) {
+                        Ok(client) => {
+                            println!("   ✅ Client created successfully");
 
                             // Test health check
-                            match provider.health_check().await {
+                            match client.health_check().await {
                                 Ok(_) => println!("   ✅ Health check passed"),
                                 Err(e) => println!("   ❌ Health check failed: {e}"),
                             }
 
                             // Get available models
-                            match provider.available_models().await {
+                            match client.list_models().await {
                                 Ok(models) => {
-                                    println!("   Available models: {}", models.join(", "));
+                                    println!("   Available models (first 5):");
+                                    for (i, model) in models.iter().take(5).enumerate() {
+                                        println!("     {}. {}", i + 1, model);
+                                    }
+                                    if models.len() > 5 {
+                                        println!("     ... and {} more", models.len() - 5);
+                                    }
                                 }
                                 Err(e) => println!("   ❌ Error getting models: {e}"),
                             }
 
                             // Make a simple request
                             println!("\n   Testing chat completion...");
-                            let test_request = ChatRequestBuilder::new()
-                                .user("Hello, test request")
-                                .temperature(0.5)
-                                .max_tokens(10)
-                                .build();
+                            let mut test_request = ChatCompletionRequest::new(
+                                "gpt-3.5-turbo",
+                                vec![ChatMessage::user("Hello, test request")],
+                            );
+                            test_request.temperature = Some(0.5);
+                            test_request.max_tokens = Some(10);
 
-                            match provider
-                                .chat_completion(test_request, "gpt-3.5-turbo")
-                                .await
-                            {
+                            match client.chat_completion(test_request).await {
                                 Ok(response) => {
-                                    println!("   ✅ Test response: {}", response.message.content);
+                                    println!(
+                                        "   ✅ Test response: {}",
+                                        extract_text(
+                                            response.choices[0].message.content.as_ref().unwrap()
+                                        )
+                                    );
                                     println!("   Tokens used: {}", response.usage.total_tokens);
                                 }
                                 Err(e) => println!("   ❌ Test request failed: {e}"),
                             }
                         }
-                        Err(e) => println!("   ❌ Failed to create provider: {e}"),
+                        Err(e) => println!("   ❌ Failed to create client: {e}"),
                     }
                 }
                 Err(e) => println!("   ❌ Invalid configuration: {e}"),
@@ -111,27 +136,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("   ✅ Caught empty API key: {e}"),
     }
 
-    // 6. Request builder patterns
-    println!("\n6. Request Builder Patterns:");
+    // 6. Request construction patterns
+    println!("\n6. Request Construction Patterns:");
 
     // Minimal request
-    let minimal = ChatRequestBuilder::new().user("Hello").build();
+    let minimal = ChatCompletionRequest::new("gpt-3.5-turbo", vec![ChatMessage::user("Hello")]);
     println!("   Minimal request: {} message(s)", minimal.messages.len());
 
     // Full-featured request
-    let full_request = ChatRequestBuilder::new()
-        .system("You are a helpful assistant.")
-        .user("What's the weather like?")
-        .assistant("I don't have access to current weather data.")
-        .user("That's okay, what can you help with?")
-        .temperature(0.7)
-        .max_tokens(150)
-        .top_p(0.9)
-        // .frequency_penalty(0.1)
-        // .presence_penalty(0.1)
-        // .stop_sequences(vec!["END".to_string()])
-        .extra_param("custom_field", serde_json::json!("custom_value"))
-        .build();
+    let mut full_request = ChatCompletionRequest::new(
+        "gpt-3.5-turbo",
+        vec![
+            ChatMessage::system("You are a helpful assistant."),
+            ChatMessage::user("What's the weather like?"),
+            ChatMessage::assistant("I don't have access to current weather data."),
+            ChatMessage::user("That's okay, what can you help with?"),
+        ],
+    );
+    full_request.temperature = Some(0.7);
+    full_request.max_tokens = Some(150);
+    full_request.top_p = Some(0.9);
+    full_request.frequency_penalty = Some(0.1);
+    full_request.presence_penalty = Some(0.1);
+    full_request.stop = Some(vec!["END".to_string()]);
 
     println!(
         "   Full request: {} message(s)",
@@ -140,7 +167,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Temperature: {:?}", full_request.temperature);
     println!("   Max tokens: {:?}", full_request.max_tokens);
     println!("   Top P: {:?}", full_request.top_p);
-    println!("   Extra params: {:?}", full_request.extra_params);
+    println!("   Frequency penalty: {:?}", full_request.frequency_penalty);
+    println!("   Presence penalty: {:?}", full_request.presence_penalty);
+    println!("   Stop sequences: {:?}", full_request.stop);
 
     Ok(())
 }

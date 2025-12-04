@@ -1,13 +1,11 @@
-mod anthropic;
-mod google;
-mod groq;
-mod openai;
-mod openai_compatible;
-mod openrouter;
+// New feature-complete provider implementations
+pub mod anthropic;
+pub mod google;
+pub mod openai;
+pub mod openai_compatible; // Used for Groq/OpenRouter
 
-pub use anthropic::AnthropicProvider;
-pub use google::GoogleProvider;
-pub use groq::GroqProvider;
-pub use openai::OpenAIProvider;
+// Export concrete clients
+pub use anthropic::AnthropicClient;
+pub use google::GoogleClient;
+pub use openai::OpenAIClient;
 pub use openai_compatible::{OpenAICompatibleProvider, ProviderIdentity, identities};
-pub use openrouter::OpenRouterProvider;

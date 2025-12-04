@@ -148,32 +148,27 @@
 //! # }
 //! ```
 
+pub mod compat_types;
 pub mod config;
 pub mod error;
-pub mod middleware;
 pub mod providers;
-pub mod simple;
-pub mod types;
 pub mod utils;
 
-#[cfg(test)]
-mod tests;
+// Concrete client exports
+pub use providers::{AnthropicClient, GoogleClient, OpenAIClient, OpenAICompatibleProvider};
 
 pub use config::{
     AnthropicConfig, ConfigBuilder, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig,
     ProviderConfig,
 };
 pub use error::LlmError;
-pub use middleware::{LlmServiceBuilder, MiddlewareConfig, MiddlewareStack, RateLimit};
-pub use providers::{
-    AnthropicProvider, GoogleProvider, GroqProvider, OpenAIProvider, OpenRouterProvider,
-};
-pub use simple::{DefaultModels, SimpleLlm, SimpleLlmBuilder, SimpleLlmClient, SimpleLlmConfig};
-pub use types::{
-    ChatCompletion, ChatMessage, ChatRequest, ChatRequestBuilder, ChatResponse, ChatRole,
-    ChatStreamEvent, LlmProvider, StreamConfig, StreamResult, TokenUsage,
-};
 pub use utils::sse::sse_lines;
+
+// Compatibility types for OpenAI-compatible providers
+pub use compat_types::{
+    ChatMessage, ChatRequest, ChatRequestBuilder, ChatResponse, ChatRole, ChatStreamEvent,
+    TokenUsage,
+};
 
 // Re-export test utilities for integration tests and examples
 #[cfg(test)]

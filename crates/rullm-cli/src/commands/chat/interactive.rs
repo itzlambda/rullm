@@ -1,13 +1,12 @@
 use crate::args::CliConfig;
+use crate::cli_client::CliClient;
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use reedline::{EditCommand, Signal};
-use rullm_core::SimpleLlm;
-use rullm_core::simple::SimpleLlmClient;
 use std::time::{Duration, Instant};
 
 pub async fn run_interactive_chat(
-    client: &SimpleLlmClient,
+    client: &CliClient,
     initial_system: Option<&str>,
     config: &CliConfig,
     streaming: bool,
@@ -34,7 +33,7 @@ pub async fn run_interactive_chat(
     );
     println!();
 
-    let mut conversation = Vec::new();
+    let mut conversation: Vec<(String, String)> = Vec::new();
     let mut line_editor = setup_reedline(config.config.vi_mode, &config.data_base_path)?;
     let prompt = ChatPrompt::new();
 
@@ -44,41 +43,36 @@ pub async fn run_interactive_chat(
 
     // Add system prompt if provided
     if let Some(system) = initial_system {
-        conversation.push((rullm_core::types::ChatRole::System, system.to_string()));
+        conversation.push(("system".to_string(), system.to_string()));
         println!("{} {}\n", "System:".green().bold(), system.dimmed());
     }
 
     // Helper function to DRY up message sending logic
     async fn process_user_message(
         input: &str,
-        conversation: &mut Vec<(rullm_core::types::ChatRole, String)>,
-        client: &SimpleLlmClient,
+        conversation: &mut Vec<(String, String)>,
+        client: &CliClient,
         streaming: bool,
     ) -> Result<()> {
         use crate::spinner::Spinner;
         use futures::StreamExt;
         use owo_colors::OwoColorize;
-        use rullm_core::types::{ChatRequestBuilder, ChatRole, ChatStreamEvent};
         use std::io::{self, Write};
         use tokio::time;
 
-        conversation.push((ChatRole::User, input.to_string()));
+        conversation.push(("user".to_string(), input.to_string()));
         if streaming {
             let spinner = Spinner::new("Assistant:");
             spinner.start().await;
             time::sleep(time::Duration::from_millis(10)).await;
-            let mut builder = ChatRequestBuilder::new().stream(true);
-            for (role, content) in &*conversation {
-                builder = builder.add_message(role.clone(), content);
-            }
-            let request = builder.build();
-            match client.stream_chat_raw(request).await {
+
+            match client.stream_chat_raw(conversation.clone()).await {
                 Ok(mut stream) => {
                     let mut full_response = String::new();
                     let mut first_token = true;
-                    while let Some(evt) = stream.next().await {
-                        match evt {
-                            Ok(ChatStreamEvent::Token(tok)) => {
+                    while let Some(result) = stream.next().await {
+                        match result {
+                            Ok(token) => {
                                 if first_token {
                                     spinner.stop_and_replace(&format!(
                                         "{} ",
@@ -86,22 +80,9 @@ pub async fn run_interactive_chat(
                                     ));
                                     first_token = false;
                                 }
-                                full_response.push_str(&tok);
-                                print!("{tok}");
+                                full_response.push_str(&token);
+                                print!("{token}");
                                 io::stdout().flush()?;
-                            }
-                            Ok(ChatStreamEvent::Done) => {
-                                println!();
-                                conversation.push((ChatRole::Assistant, full_response));
-                                break;
-                            }
-                            Ok(ChatStreamEvent::Error(msg)) => {
-                                spinner.stop_and_replace(&format!(
-                                    "{} {}\n",
-                                    "Error:".red().bold(),
-                                    msg
-                                ));
-                                break;
                             }
                             Err(err) => {
                                 spinner.stop_and_replace(&format!(
@@ -109,10 +90,13 @@ pub async fn run_interactive_chat(
                                     "Error:".red().bold(),
                                     err
                                 ));
-                                break;
+                                return Ok(());
                             }
                         }
                     }
+                    println!();
+                    conversation.push(("assistant".to_string(), full_response));
+
                     if first_token {
                         spinner.stop_and_replace(&format!(
                             "{} {}\n",
@@ -129,14 +113,17 @@ pub async fn run_interactive_chat(
             let spinner = Spinner::new("Assistant:");
             spinner.start().await;
             time::sleep(time::Duration::from_millis(10)).await;
-            match client.conversation(conversation.clone()).await {
+
+            // For non-streaming, we'll just use the last user message
+            // TODO: Implement proper conversation support
+            match client.chat(input).await {
                 Ok(response) => {
                     spinner.stop_and_replace(&format!(
                         "{} {}\n",
                         "Assistant:".blue().bold(),
                         response
                     ));
-                    conversation.push((ChatRole::Assistant, response));
+                    conversation.push(("assistant".to_string(), response));
                 }
                 Err(e) => {
                     spinner.stop_and_replace(&format!("{} {}\n", "Error:".red().bold(), e));

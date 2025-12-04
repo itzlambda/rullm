@@ -3,6 +3,7 @@
 mod aliases;
 mod args;
 mod auth;
+mod cli_client;
 mod cli_helpers;
 mod client;
 mod commands;
