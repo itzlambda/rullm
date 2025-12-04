@@ -225,9 +225,7 @@ impl OpenAIOAuth {
             .unwrap_or(0);
 
         // OpenAI might not always return a refresh token
-        let refresh_token = token_response
-            .refresh_token
-            .unwrap_or_else(|| String::new());
+        let refresh_token = token_response.refresh_token.unwrap_or_default();
 
         Ok(Credential::oauth(
             token_response.access_token,

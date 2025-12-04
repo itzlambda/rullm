@@ -219,13 +219,16 @@ pub async fn from_model(
     cli_config: &mut CliConfig,
 ) -> Result<SimpleLlmClient> {
     // Use the global alias resolver for CLI functionality
-    let resolver = crate::aliases::get_global_alias_resolver(&cli_config.config_base_path);
-    let resolver = resolver
-        .read()
-        .map_err(|_| anyhow::anyhow!("Failed to acquire read lock on global resolver"))?;
-    let (provider, model_name) = resolver
-        .resolve(model_str)
-        .context("Invalid model format")?;
+    // Resolve provider and model inside a block so the lock is dropped before the await
+    let (provider, model_name) = {
+        let resolver = crate::aliases::get_global_alias_resolver(&cli_config.config_base_path);
+        let resolver = resolver
+            .read()
+            .map_err(|_| anyhow::anyhow!("Failed to acquire read lock on global resolver"))?;
+        resolver
+            .resolve(model_str)
+            .context("Invalid model format")?
+    };
 
     // Get token with automatic refresh for OAuth
     let token = auth::get_or_refresh_token(

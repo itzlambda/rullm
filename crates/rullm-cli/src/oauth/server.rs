@@ -160,9 +160,7 @@ impl CallbackServer {
     fn extract_query_param(path: &str, param: &str) -> Option<String> {
         let query = path.split('?').nth(1)?;
         for pair in query.split('&') {
-            let mut kv = pair.splitn(2, '=');
-            let key = kv.next()?;
-            let value = kv.next()?;
+            let (key, value) = pair.split_once('=')?;
             if key == param {
                 // URL decode the value
                 return Some(urlencoding::decode(value).ok()?.into_owned());

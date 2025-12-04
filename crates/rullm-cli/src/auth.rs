@@ -338,13 +338,15 @@ mod tests {
 
     #[test]
     fn test_auth_config_serialization() {
-        let mut config = AuthConfig::default();
-        config.anthropic = Some(Credential::oauth(
-            "sk-ant-oat01-test".to_string(),
-            "sk-ant-ort01-test".to_string(),
-            1764813330304,
-        ));
-        config.openai = Some(Credential::api("sk-proj-test".to_string()));
+        let config = AuthConfig {
+            anthropic: Some(Credential::oauth(
+                "sk-ant-oat01-test".to_string(),
+                "sk-ant-ort01-test".to_string(),
+                1764813330304,
+            )),
+            openai: Some(Credential::api("sk-proj-test".to_string())),
+            ..Default::default()
+        };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
 
@@ -360,8 +362,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path();
 
-        let mut config = AuthConfig::default();
-        config.groq = Some(Credential::api("test-groq-key".to_string()));
+        let config = AuthConfig {
+            groq: Some(Credential::api("test-groq-key".to_string())),
+            ..Default::default()
+        };
 
         config.save(config_path).unwrap();
 
@@ -374,8 +378,10 @@ mod tests {
 
     #[test]
     fn test_get_credential_file_precedence() {
-        let mut config = AuthConfig::default();
-        config.anthropic = Some(Credential::api("file-key".to_string()));
+        let config = AuthConfig {
+            anthropic: Some(Credential::api("file-key".to_string())),
+            ..Default::default()
+        };
 
         // File credential should be returned
         let info = get_credential(&Provider::Anthropic, &config).unwrap();
