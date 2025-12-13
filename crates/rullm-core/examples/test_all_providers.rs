@@ -1,7 +1,7 @@
-use rullm_core::config::{AnthropicConfig, GoogleAiConfig, OpenAIConfig};
-use rullm_core::providers::anthropic::AnthropicClient;
-use rullm_core::providers::google::GoogleClient;
+use rullm_core::providers::anthropic::{AnthropicClient, AnthropicConfig};
+use rullm_core::providers::google::{GoogleAiConfig, GoogleClient};
 use rullm_core::providers::openai::OpenAIClient;
+use rullm_core::providers::openai_compatible::OpenAIConfig;
 use std::env;
 
 #[tokio::main]

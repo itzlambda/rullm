@@ -1,6 +1,7 @@
 use super::types::*;
-use crate::config::{OpenAIConfig, ProviderConfig};
+use crate::config::ProviderConfig;
 use crate::error::LlmError;
+use crate::providers::openai_compatible::OpenAIConfig;
 use crate::utils::sse::sse_lines;
 use futures::Stream;
 use futures::StreamExt;

@@ -4,9 +4,12 @@
 //! basic chat operations without exposing the full complexity of each provider's API.
 
 use futures::StreamExt;
-use rullm_core::config::{AnthropicConfig, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig};
 use rullm_core::error::LlmError;
-use rullm_core::providers::openai_compatible::{OpenAICompatibleProvider, identities};
+use rullm_core::providers::anthropic::AnthropicConfig;
+use rullm_core::providers::google::GoogleAiConfig;
+use rullm_core::providers::openai_compatible::{
+    OpenAICompatibleConfig, OpenAICompatibleProvider, OpenAIConfig, identities,
+};
 use rullm_core::providers::{AnthropicClient, GoogleClient, OpenAIClient};
 use std::pin::Pin;
 

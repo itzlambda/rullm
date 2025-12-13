@@ -1,3 +1,7 @@
+pub mod config;
+
+pub use config::{OpenAICompatibleConfig, OpenAIConfig};
+
 use crate::compat_types::{
     ChatMessage, ChatRequest, ChatResponse, ChatRole, ChatStreamEvent, TokenUsage,
 };
@@ -46,7 +50,7 @@ pub mod identities {
 /// Generic OpenAI-compatible provider implementation
 #[derive(Clone)]
 pub struct OpenAICompatibleProvider {
-    config: crate::config::OpenAICompatibleConfig,
+    config: OpenAICompatibleConfig,
     client: Client,
     identity: ProviderIdentity,
 }
@@ -54,7 +58,7 @@ pub struct OpenAICompatibleProvider {
 impl OpenAICompatibleProvider {
     /// Create a new OpenAI-compatible provider with custom identity
     pub fn new(
-        config: crate::config::OpenAICompatibleConfig,
+        config: OpenAICompatibleConfig,
         identity: ProviderIdentity,
     ) -> Result<Self, LlmError> {
         config.validate()?;
@@ -67,17 +71,17 @@ impl OpenAICompatibleProvider {
     }
 
     /// Create an OpenAI provider
-    pub fn openai(config: crate::config::OpenAICompatibleConfig) -> Result<Self, LlmError> {
+    pub fn openai(config: OpenAICompatibleConfig) -> Result<Self, LlmError> {
         Self::new(config, identities::OPENAI)
     }
 
     /// Create a Groq provider
-    pub fn groq(config: crate::config::OpenAICompatibleConfig) -> Result<Self, LlmError> {
+    pub fn groq(config: OpenAICompatibleConfig) -> Result<Self, LlmError> {
         Self::new(config, identities::GROQ)
     }
 
     /// Create an OpenRouter provider
-    pub fn openrouter(config: crate::config::OpenAICompatibleConfig) -> Result<Self, LlmError> {
+    pub fn openrouter(config: OpenAICompatibleConfig) -> Result<Self, LlmError> {
         Self::new(config, identities::OPENROUTER)
     }
 

@@ -9,3 +9,8 @@ pub use anthropic::AnthropicClient;
 pub use google::GoogleClient;
 pub use openai::OpenAIClient;
 pub use openai_compatible::{OpenAICompatibleProvider, ProviderIdentity, identities};
+
+// Export provider-specific configs
+pub use anthropic::AnthropicConfig;
+pub use google::GoogleAiConfig;
+pub use openai_compatible::{OpenAICompatibleConfig, OpenAIConfig};
