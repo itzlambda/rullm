@@ -237,6 +237,10 @@ pub fn get_credential(provider: &Provider, auth_config: &AuthConfig) -> Option<C
 ///
 /// This is the preferred method for getting tokens as it handles expiration.
 /// If the token is refreshed, the new credential is saved to the config file.
+///
+/// Note: Prefer `get_token_with_type` when you need to know if the credential
+/// is OAuth (to configure different authentication headers).
+#[allow(dead_code)]
 pub async fn get_or_refresh_token(
     provider: &Provider,
     auth_config: &mut AuthConfig,
@@ -277,6 +281,55 @@ pub async fn get_or_refresh_token(
     }
 
     Ok(info.credential.get_token().to_string())
+}
+
+/// Get token and credential type for a provider.
+///
+/// Returns (token, is_oauth) where is_oauth is true if the credential is OAuth.
+/// This is useful when the caller needs to know the credential type to configure
+/// different authentication headers.
+pub async fn get_token_with_type(
+    provider: &Provider,
+    auth_config: &mut AuthConfig,
+    config_base_path: &Path,
+) -> Result<(String, bool)> {
+    // Get credential info
+    let info = get_credential(provider, auth_config)
+        .ok_or_else(|| anyhow::anyhow!("No credential found for {}", provider))?;
+
+    // If from environment, it's always an API key (not OAuth)
+    if matches!(info.source, CredentialSource::Environment(_)) {
+        return Ok((info.credential.get_token().to_string(), false));
+    }
+
+    // Check if OAuth token is expired and needs refresh
+    let credential = if info.credential.is_expired() {
+        if let Some(refresh_tok) = info.credential.refresh_token() {
+            eprintln!("OAuth token expired, refreshing...");
+            match refresh_oauth_token(provider, refresh_tok).await {
+                Ok(new_credential) => {
+                    auth_config.set(provider, new_credential.clone());
+                    auth_config.save(config_base_path)?;
+                    eprintln!("Token refreshed successfully.");
+                    new_credential
+                }
+                Err(e) => {
+                    return Err(anyhow::anyhow!(
+                        "OAuth token expired and refresh failed: {}. Please run 'rullm auth login {}'",
+                        e,
+                        provider
+                    ));
+                }
+            }
+        } else {
+            info.credential
+        }
+    } else {
+        info.credential
+    };
+
+    let is_oauth = matches!(credential, Credential::OAuth { .. });
+    Ok((credential.get_token().to_string(), is_oauth))
 }
 
 /// Refresh an OAuth token for a specific provider.

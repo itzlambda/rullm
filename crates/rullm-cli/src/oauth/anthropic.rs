@@ -6,7 +6,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-use super::{CallbackServer, PkceChallenge};
+use super::PkceChallenge;
+use super::server::CallbackServer;
 use crate::auth::Credential;
 
 /// Anthropic OAuth configuration.
@@ -17,22 +18,22 @@ pub struct AnthropicOAuth {
     pub token_url: &'static str,
     /// Client ID (Claude Code's public ID)
     pub client_id: &'static str,
-    /// Callback port
-    pub callback_port: u16,
     /// Required scopes
     pub scopes: &'static [&'static str],
+    /// Local callback port
+    pub callback_port: u16,
 }
 
 impl Default for AnthropicOAuth {
     fn default() -> Self {
         Self {
-            authorization_url: "https://console.anthropic.com/oauth/authorize",
+            authorization_url: "https://claude.ai/oauth/authorize",
             // The token endpoint lives on the console domain (not the public API)
             // and requires the `/v1` prefix; posting to the API host returns 404.
             token_url: "https://console.anthropic.com/v1/oauth/token",
             client_id: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-            callback_port: 8765,
             scopes: &["org:create_api_key", "user:profile", "user:inference"],
+            callback_port: 8765,
         }
     }
 }
@@ -63,8 +64,6 @@ struct TokenRequest<'a> {
     code: &'a str,
     redirect_uri: &'a str,
     code_verifier: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    state: Option<&'a str>,
 }
 
 impl AnthropicOAuth {
@@ -74,74 +73,66 @@ impl AnthropicOAuth {
     }
 
     /// Build the authorization URL for the OAuth flow.
-    fn build_authorization_url(
-        &self,
-        pkce: &PkceChallenge,
-        state: &str,
-        redirect_uri: &str,
-    ) -> String {
+    fn build_authorization_url(&self, redirect_uri: &str, pkce: &PkceChallenge) -> String {
         let scope = self.scopes.join(" ");
 
         format!(
-            "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&code_challenge={}&code_challenge_method={}&state={}",
+            "{}?code=true&client_id={}&response_type=code&redirect_uri={}&scope={}&code_challenge={}&code_challenge_method={}&state={}",
             self.authorization_url,
             urlencoding::encode(self.client_id),
             urlencoding::encode(redirect_uri),
             urlencoding::encode(&scope),
             urlencoding::encode(&pkce.challenge),
             pkce.method(),
-            urlencoding::encode(state)
+            urlencoding::encode(&pkce.verifier) // Use verifier as state (like OpenCode)
         )
     }
 
     /// Start the OAuth flow and return the credential on success.
     ///
-    /// This will:
-    /// 1. Start a local callback server
-    /// 2. Open the browser to the authorization URL
-    /// 3. Wait for the callback with the authorization code
-    /// 4. Exchange the code for tokens
+    /// This opens a browser for the user to authorize, then captures
+    /// the callback on a local server.
     pub async fn login(&self) -> Result<Credential> {
-        // Generate PKCE challenge
-        let pkce = PkceChallenge::generate();
-
-        // Generate state for CSRF protection
-        let state = generate_state();
-
-        // Start callback server
+        // Start local callback server
         let server =
             CallbackServer::new(self.callback_port).context("Failed to start callback server")?;
 
         let redirect_uri = server.redirect_uri();
 
-        // Build and open authorization URL
-        let auth_url = self.build_authorization_url(&pkce, &state, &redirect_uri);
+        // Generate PKCE challenge
+        let pkce = PkceChallenge::generate();
+
+        // Build authorization URL
+        let auth_url = self.build_authorization_url(&redirect_uri, &pkce);
 
         println!("Opening browser for Anthropic authentication...");
-        webbrowser::open(&auth_url).context("Failed to open browser")?;
 
-        println!("Waiting for authentication (timeout: 5 minutes)...");
+        // Try to open browser, but don't fail if it doesn't work
+        if let Err(e) = webbrowser::open(&auth_url) {
+            println!("Could not open browser automatically: {}", e);
+            println!("Please open this URL manually:");
+            println!("{}", auth_url);
+        }
 
-        // Wait for callback
+        // Wait for the callback
+        println!("Waiting for authorization callback...");
         let callback = server
             .wait_for_callback(Duration::from_secs(300))
             .context("Failed to receive OAuth callback")?;
 
-        // Verify state
-        if callback.state.as_deref() != Some(&state) {
-            anyhow::bail!("State mismatch in OAuth callback (possible CSRF attack)");
+        // Verify state matches (we use verifier as state)
+        if let Some(state) = &callback.state {
+            if state != &pkce.verifier {
+                anyhow::bail!("State mismatch in OAuth callback");
+            }
         }
 
         // Exchange code for tokens
         let credential = self
-            .exchange_code(
-                &callback.code,
-                &pkce.verifier,
-                &redirect_uri,
-                callback.state.as_deref(),
-            )
+            .exchange_code(&callback.code, &redirect_uri, &pkce.verifier)
             .await?;
 
+        println!("Authentication successful!");
         Ok(credential)
     }
 
@@ -149,9 +140,8 @@ impl AnthropicOAuth {
     async fn exchange_code(
         &self,
         code: &str,
-        code_verifier: &str,
         redirect_uri: &str,
-        state: Option<&str>,
+        code_verifier: &str,
     ) -> Result<Credential> {
         let request_body = TokenRequest {
             grant_type: "authorization_code",
@@ -159,7 +149,6 @@ impl AnthropicOAuth {
             code,
             redirect_uri,
             code_verifier,
-            state,
         };
 
         let client = reqwest::Client::new();
@@ -235,14 +224,6 @@ impl AnthropicOAuth {
     }
 }
 
-/// Generate a random state string for CSRF protection.
-fn generate_state() -> String {
-    use rand::RngCore;
-    let mut bytes = [0u8; 16];
-    rand::rng().fill_bytes(&mut bytes);
-    hex::encode(bytes)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,24 +232,21 @@ mod tests {
     fn test_build_authorization_url() {
         let oauth = AnthropicOAuth::new();
         let pkce = PkceChallenge::generate();
-        let state = "test-state";
-        let redirect_uri = "http://localhost:8765/callback";
 
-        let url = oauth.build_authorization_url(&pkce, state, redirect_uri);
+        let url = oauth.build_authorization_url("http://localhost:8765/callback", &pkce);
 
-        assert!(url.starts_with("https://console.anthropic.com/oauth/authorize"));
+        assert!(url.starts_with("https://claude.ai/oauth/authorize"));
         assert!(url.contains("response_type=code"));
         assert!(url.contains("client_id="));
         assert!(url.contains("redirect_uri="));
         assert!(url.contains("code_challenge="));
         assert!(url.contains("code_challenge_method=S256"));
-        assert!(url.contains("state=test-state"));
+        assert!(url.contains("state="));
     }
 
     #[test]
     fn test_default_config() {
         let oauth = AnthropicOAuth::new();
-        assert_eq!(oauth.callback_port, 8765);
         assert!(oauth.scopes.contains(&"user:inference"));
     }
 }

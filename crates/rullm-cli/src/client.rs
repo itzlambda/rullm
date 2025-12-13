@@ -12,6 +12,7 @@ pub fn create_client(
     _base_url: Option<&str>,
     cli: &Cli,
     model_name: &str,
+    is_oauth: bool,
 ) -> Result<CliClient, LlmError> {
     // Build CoreCliConfig based on CLI args
     let mut config = CoreCliConfig::default();
@@ -39,7 +40,7 @@ pub fn create_client(
         Provider::OpenAI => CliClient::openai(api_key, model_name, config),
         Provider::Groq => CliClient::groq(api_key, model_name, config),
         Provider::OpenRouter => CliClient::openrouter(api_key, model_name, config),
-        Provider::Anthropic => CliClient::anthropic(api_key, model_name, config),
+        Provider::Anthropic => CliClient::anthropic(api_key, model_name, config, is_oauth),
         Provider::Google => CliClient::google(api_key, model_name, config),
     }
 }
@@ -65,8 +66,8 @@ pub async fn from_model(
             .context("Invalid model format")?
     };
 
-    // Get token with automatic refresh for OAuth
-    let token = auth::get_or_refresh_token(
+    // Get token with automatic refresh for OAuth, including credential type
+    let (token, is_oauth) = auth::get_token_with_type(
         &provider,
         &mut cli_config.auth_config,
         &cli_config.config_base_path,
@@ -81,5 +82,5 @@ pub async fn from_model(
         )
     })?;
 
-    create_client(&provider, &token, None, cli, &model_name).map_err(anyhow::Error::from)
+    create_client(&provider, &token, None, cli, &model_name, is_oauth).map_err(anyhow::Error::from)
 }

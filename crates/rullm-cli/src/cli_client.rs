@@ -67,8 +67,9 @@ impl CliClient {
         api_key: impl Into<String>,
         model: impl Into<String>,
         config: CliConfig,
+        use_oauth: bool,
     ) -> Result<Self, LlmError> {
-        let client_config = AnthropicConfig::new(api_key);
+        let client_config = AnthropicConfig::new(api_key).with_oauth(use_oauth);
         let client = AnthropicClient::new(client_config)?;
         Ok(Self::Anthropic {
             client,
