@@ -6,7 +6,7 @@ use etcetera::BaseStrategy;
 use strum::IntoEnumIterator;
 
 use crate::auth::{self, AuthConfig, Credential};
-use crate::oauth::{anthropic::AnthropicOAuth, openai::OpenAIOAuth};
+use crate::oauth::anthropic::AnthropicOAuth;
 use crate::output::OutputLevel;
 use crate::provider::Provider;
 
@@ -64,8 +64,9 @@ impl AuthArgs {
                                 oauth.login().await?
                             }
                             Provider::OpenAI => {
-                                let oauth = OpenAIOAuth::new();
-                                oauth.login().await?
+                                anyhow::bail!(
+                                    "OpenAI OAuth login is not implemented yet. Use API key instead."
+                                );
                             }
                             _ => {
                                 anyhow::bail!(
@@ -160,28 +161,44 @@ fn select_provider() -> Result<Provider> {
 fn select_auth_method(provider: &Provider) -> Result<AuthMethod> {
     use std::io::{self, Write};
 
-    // Check if OAuth is available for this provider
-    let oauth_available = matches!(provider, Provider::Anthropic | Provider::OpenAI);
+    match provider {
+        Provider::Anthropic => {
+            println!("\n? Select authentication method");
+            println!("  1) OAuth (subscription-based access)");
+            println!("  2) API Key");
 
-    if !oauth_available {
-        // Only API key available
-        return Ok(AuthMethod::ApiKey);
-    }
+            print!("\nEnter number (1-2): ");
+            io::stdout().flush()?;
 
-    println!("\n? Select authentication method");
-    println!("  1) OAuth (subscription-based access)");
-    println!("  2) API Key");
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
 
-    print!("\nEnter number (1-2): ");
-    io::stdout().flush()?;
+            match input.trim() {
+                "1" => Ok(AuthMethod::OAuth),
+                "2" => Ok(AuthMethod::ApiKey),
+                _ => anyhow::bail!("Invalid selection"),
+            }
+        }
+        Provider::OpenAI => {
+            println!("\n? Select authentication method");
+            println!("  1) OAuth (not implemented)");
+            println!("  2) API Key");
 
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+            print!("\nEnter number (1-2): ");
+            io::stdout().flush()?;
 
-    match input.trim() {
-        "1" => Ok(AuthMethod::OAuth),
-        "2" => Ok(AuthMethod::ApiKey),
-        _ => anyhow::bail!("Invalid selection"),
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+
+            match input.trim() {
+                "1" => {
+                    anyhow::bail!("OpenAI OAuth login is not implemented yet. Use API key instead.")
+                }
+                "2" => Ok(AuthMethod::ApiKey),
+                _ => anyhow::bail!("Invalid selection"),
+            }
+        }
+        _ => Ok(AuthMethod::ApiKey),
     }
 }
 

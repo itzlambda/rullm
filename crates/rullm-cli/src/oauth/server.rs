@@ -43,16 +43,6 @@ impl CallbackServer {
         format!("http://localhost:{}/callback", self.port)
     }
 
-    /// Build a redirect URI using a custom path (must start with '/').
-    pub fn redirect_uri_with_path(&self, path: &str) -> String {
-        let normalized = if path.starts_with('/') {
-            path.to_string()
-        } else {
-            format!("/{}", path)
-        };
-        format!("http://localhost:{}{}", self.port, normalized)
-    }
-
     /// Wait for the OAuth callback and extract the authorization code.
     ///
     /// This blocks until a request is received or the timeout is reached.

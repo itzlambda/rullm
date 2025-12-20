@@ -1,7 +1,7 @@
 //! Authentication credential management for rullm.
 //!
 //! Supports multiple authentication methods per provider:
-//! - OAuth (for Claude Max/Pro, ChatGPT Plus/Pro subscriptions)
+//! - OAuth (for Claude Max/Pro subscriptions)
 //! - API keys (traditional method)
 
 use crate::provider::Provider;
@@ -334,15 +334,11 @@ pub async fn get_token_with_type(
 
 /// Refresh an OAuth token for a specific provider.
 async fn refresh_oauth_token(provider: &Provider, refresh_token: &str) -> Result<Credential> {
-    use crate::oauth::{anthropic::AnthropicOAuth, openai::OpenAIOAuth};
+    use crate::oauth::anthropic::AnthropicOAuth;
 
     match provider {
         Provider::Anthropic => {
             let oauth = AnthropicOAuth::new();
-            oauth.refresh_token(refresh_token).await
-        }
-        Provider::OpenAI => {
-            let oauth = OpenAIOAuth::new();
             oauth.refresh_token(refresh_token).await
         }
         _ => Err(anyhow::anyhow!(
@@ -440,5 +436,22 @@ mod tests {
         let info = get_credential(&Provider::Anthropic, &config).unwrap();
         assert_eq!(info.source, CredentialSource::File);
         assert_eq!(info.credential.get_token(), "file-key");
+    }
+
+    #[tokio::test]
+    async fn test_get_token_with_type_api_is_not_oauth() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut config = AuthConfig {
+            openai: Some(Credential::api("sk-test".to_string())),
+            ..Default::default()
+        };
+
+        let (token, is_oauth) =
+            get_token_with_type(&Provider::OpenAI, &mut config, temp_dir.path())
+                .await
+                .unwrap();
+
+        assert_eq!(token, "sk-test");
+        assert!(!is_oauth);
     }
 }

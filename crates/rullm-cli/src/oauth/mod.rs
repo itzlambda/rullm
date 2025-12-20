@@ -6,7 +6,5 @@ mod pkce;
 mod server;
 
 pub mod anthropic;
-pub mod openai;
 
 pub use pkce::PkceChallenge;
-pub use server::CallbackServer;
