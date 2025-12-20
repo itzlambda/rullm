@@ -143,6 +143,35 @@ pub struct CacheControl {
     pub cache_type: String, // "ephemeral"
 }
 
+impl CacheControl {
+    /// Create an ephemeral cache control
+    pub fn ephemeral() -> Self {
+        Self {
+            cache_type: "ephemeral".to_string(),
+        }
+    }
+}
+
+impl SystemBlock {
+    /// Create a text system block
+    pub fn text(text: impl Into<String>) -> Self {
+        Self {
+            block_type: "text".to_string(),
+            text: text.into(),
+            cache_control: None,
+        }
+    }
+
+    /// Create a text system block with ephemeral cache control
+    pub fn text_with_cache(text: impl Into<String>) -> Self {
+        Self {
+            block_type: "text".to_string(),
+            text: text.into(),
+            cache_control: Some(CacheControl::ephemeral()),
+        }
+    }
+}
+
 /// Request metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {

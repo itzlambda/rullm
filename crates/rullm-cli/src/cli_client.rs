@@ -13,6 +13,29 @@ use rullm_core::providers::openai_compatible::{
 use rullm_core::providers::{AnthropicClient, GoogleClient, OpenAIClient};
 use std::pin::Pin;
 
+/// Claude Code identification text for OAuth requests
+const CLAUDE_CODE_SPOOF_TEXT: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/// Prepend Claude Code system block to an existing system prompt (for OAuth requests)
+fn prepend_claude_code_system(
+    existing: Option<rullm_core::providers::anthropic::SystemPrompt>,
+) -> rullm_core::providers::anthropic::SystemPrompt {
+    use rullm_core::providers::anthropic::{SystemBlock, SystemPrompt};
+
+    let spoof_block = SystemBlock::text_with_cache(CLAUDE_CODE_SPOOF_TEXT);
+
+    match existing {
+        None => SystemPrompt::Blocks(vec![spoof_block]),
+        Some(SystemPrompt::Text(text)) => {
+            SystemPrompt::Blocks(vec![spoof_block, SystemBlock::text(text)])
+        }
+        Some(SystemPrompt::Blocks(mut blocks)) => {
+            blocks.insert(0, spoof_block);
+            SystemPrompt::Blocks(blocks)
+        }
+    }
+}
+
 /// Simple configuration for CLI adapter
 #[derive(Debug, Clone, Default)]
 pub struct CliConfig {
@@ -31,6 +54,7 @@ pub enum CliClient {
         client: AnthropicClient,
         model: String,
         config: CliConfig,
+        is_oauth: bool,
     },
     Google {
         client: GoogleClient,
@@ -78,6 +102,7 @@ impl CliClient {
             client,
             model: model.into(),
             config,
+            is_oauth: use_oauth,
         })
     }
 
@@ -163,6 +188,7 @@ impl CliClient {
                 client,
                 model,
                 config,
+                is_oauth,
             } => {
                 use rullm_core::providers::anthropic::{Message, MessagesRequest};
 
@@ -172,6 +198,10 @@ impl CliClient {
 
                 if let Some(temp) = config.temperature {
                     request.temperature = Some(temp);
+                }
+
+                if *is_oauth {
+                    request.system = Some(prepend_claude_code_system(request.system.take()));
                 }
 
                 let response = client.messages(request).await?;
@@ -319,6 +349,7 @@ impl CliClient {
                 client,
                 model,
                 config,
+                is_oauth,
             } => {
                 use rullm_core::providers::anthropic::{Message, MessagesRequest};
 
@@ -337,6 +368,10 @@ impl CliClient {
                 let mut request = MessagesRequest::new(model, msgs, max_tokens);
                 if let Some(temp) = config.temperature {
                     request.temperature = Some(temp);
+                }
+
+                if *is_oauth {
+                    request.system = Some(prepend_claude_code_system(request.system.take()));
                 }
 
                 let stream = client.messages_stream(request).await?;

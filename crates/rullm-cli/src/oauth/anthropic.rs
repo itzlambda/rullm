@@ -64,6 +64,7 @@ struct TokenRequest<'a> {
     code: &'a str,
     redirect_uri: &'a str,
     code_verifier: &'a str,
+    state: &'a str,
 }
 
 impl AnthropicOAuth {
@@ -127,9 +128,14 @@ impl AnthropicOAuth {
             }
         }
 
-        // Exchange code for tokens
+        // Exchange code for tokens (state is required by Anthropic's token endpoint)
         let credential = self
-            .exchange_code(&callback.code, &redirect_uri, &pkce.verifier)
+            .exchange_code(
+                &callback.code,
+                &redirect_uri,
+                &pkce.verifier,
+                &pkce.verifier,
+            )
             .await?;
 
         println!("Authentication successful!");
@@ -142,6 +148,7 @@ impl AnthropicOAuth {
         code: &str,
         redirect_uri: &str,
         code_verifier: &str,
+        state: &str,
     ) -> Result<Credential> {
         let request_body = TokenRequest {
             grant_type: "authorization_code",
@@ -149,12 +156,12 @@ impl AnthropicOAuth {
             code,
             redirect_uri,
             code_verifier,
+            state,
         };
 
         let client = reqwest::Client::new();
         let response = client
             .post(self.token_url)
-            // Anthropic expects JSON payloads for the token exchange.
             .json(&request_body)
             .send()
             .await

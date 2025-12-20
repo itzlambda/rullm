@@ -56,7 +56,6 @@ impl ProviderConfig for AnthropicConfig {
 
         if self.use_oauth {
             // OAuth: use Bearer token + required beta headers
-            // Note: OpenCode doesn't send anthropic-version for OAuth requests
             headers.insert(
                 "Authorization".to_string(),
                 format!("Bearer {}", self.api_key),
@@ -65,6 +64,7 @@ impl ProviderConfig for AnthropicConfig {
                 "anthropic-beta".to_string(),
                 "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14".to_string(),
             );
+            headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
         } else {
             // API key: use x-api-key header
             headers.insert("x-api-key".to_string(), self.api_key.clone());
