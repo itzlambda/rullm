@@ -486,18 +486,6 @@ impl CliClient {
         }
     }
 
-    /// Get available models for the provider
-    pub async fn available_models(&self) -> Result<Vec<String>, LlmError> {
-        match self {
-            Self::OpenAI { client, .. } => client.list_models().await,
-            Self::Anthropic { client, .. } => client.list_models().await,
-            Self::Google { client, .. } => client.list_models().await,
-            Self::Groq { client, .. } | Self::OpenRouter { client, .. } => {
-                client.available_models().await
-            }
-        }
-    }
-
     /// Get provider name
     pub fn provider_name(&self) -> &'static str {
         match self {

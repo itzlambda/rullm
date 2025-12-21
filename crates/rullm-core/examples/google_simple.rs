@@ -125,17 +125,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // 7. List models
-    println!("\n📋 Available models:");
-    let models = client.list_models().await?;
-    for (i, model) in models.iter().take(5).enumerate() {
-        println!("  {}. {}", i + 1, model);
-    }
-    if models.len() > 5 {
-        println!("  ... and {} more", models.len() - 5);
-    }
-
-    // 8. Health check
+    // 7. Health check
     match client.health_check().await {
         Ok(_) => println!("\n✅ Google AI is healthy"),
         Err(e) => println!("\n❌ Health check failed: {e}"),

@@ -37,7 +37,7 @@ const CHAT_EXAMPLES: &str = r#"EXAMPLES:
 
 const MODELS_EXAMPLES: &str = r#"EXAMPLES:
   rullm models list                        # List cached models
-  rullm models update -m openai/gpt-4      # Fetch OpenAI models
+  rullm models update                      # Fetch latest models
   rullm models default openai/gpt-4o       # Set default model
   rullm models clear                       # Clear model cache"#;
 

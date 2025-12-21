@@ -1,14 +1,14 @@
-use crate::cli_client::CliClient;
 use anyhow::Result;
 use chrono::Utc;
 use clap::{Args, Subcommand};
-use rullm_core::LlmError;
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::time::Duration;
 use strum::IntoEnumIterator;
 
 use crate::{
     aliases::UserAliasConfig,
     args::{Cli, CliConfig},
-    client,
     commands::{ModelsCache, format_duration},
     constants::{ALIASES_CONFIG_FILE, MODEL_FILE_NAME},
     output::OutputLevel,
@@ -23,14 +23,14 @@ pub struct ModelsArgs {
 
 #[derive(Subcommand)]
 pub enum ModelsAction {
-    /// List available models for the current provider (default)
+    /// List cached models
     List,
     /// Set a default model that will be used when --model is not supplied
     Default {
         /// Model identifier in the form provider:model-name (e.g. openai:gpt-4o)
         model: Option<String>,
     },
-    /// Fetch fresh models from all providers with available API keys and update local cache
+    /// Fetch fresh models from models.dev and update local cache
     Update,
     /// Clear the local models cache
     Clear,
@@ -41,7 +41,7 @@ impl ModelsArgs {
         &self,
         output_level: OutputLevel,
         cli_config: &mut CliConfig,
-        cli: &Cli,
+        _cli: &Cli,
     ) -> Result<()> {
         match &self.action {
             ModelsAction::List => {
@@ -67,34 +67,28 @@ impl ModelsArgs {
                 }
             }
             ModelsAction::Update => {
-                // List of supported providers
-                let providers = Provider::iter();
-                let mut updated = vec![];
-                let mut skipped = vec![];
+                let supported: Vec<String> = Provider::iter().map(|p| p.to_string()).collect();
 
-                for provider in providers {
-                    let provider = format!("{provider}");
-                    // Try to create a client for this provider
-                    let model_hint = format!("{provider}:dummy"); // dummy model name, just to get the client
-                    let client = match client::from_model(&model_hint, cli, cli_config).await {
-                        Ok(c) => c,
-                        Err(_) => {
-                            skipped.push(provider);
-                            continue;
-                        }
-                    };
-                    match update_models(cli_config, &client, output_level).await {
-                        Ok(_) => updated.push(provider),
-                        Err(_) => skipped.push(provider),
-                    }
+                crate::output::progress("Fetching models from models.dev...", output_level);
+
+                let models = fetch_models_from_models_dev(&supported).await?;
+                if models.is_empty() {
+                    anyhow::bail!("No models returned by models.dev");
                 }
 
-                if !skipped.is_empty() {
-                    crate::output::note(
-                        &format!("Skipped (no API key or error): {}", skipped.join(", ")),
-                        output_level,
-                    );
+                let cache = ModelsCache::new(models);
+                let path = cli_config.data_base_path.join(MODEL_FILE_NAME);
+
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
                 }
+
+                std::fs::write(&path, serde_json::to_string_pretty(&cache)?)?;
+
+                crate::output::success(
+                    &format!("Updated {} models", cache.models.len()),
+                    output_level,
+                );
             }
             ModelsAction::Clear => {
                 clear_models_cache(cli_config, output_level)?;
@@ -216,85 +210,6 @@ pub fn clear_models_cache(cli_config: &CliConfig, output_level: OutputLevel) -> 
     Ok(())
 }
 
-pub async fn update_models(
-    cli_config: &mut CliConfig,
-    client: &CliClient,
-    output_level: OutputLevel,
-) -> Result<(), LlmError> {
-    crate::output::progress(
-        &format!(
-            "Fetching models from {}...",
-            crate::output::format_provider(client.provider_name())
-        ),
-        output_level,
-    );
-
-    let mut models = client.available_models().await.map_err(|e| {
-        crate::output::error(&format!("Failed to fetch models: {e}"), output_level);
-        e
-    })?;
-
-    if models.is_empty() {
-        crate::output::error("No models returned by provider", output_level);
-        return Err(LlmError::model(
-            "No models returned by provider".to_string(),
-        ));
-    }
-
-    models.sort();
-    models.dedup();
-
-    _cache_models(cli_config, client.provider_name(), &models).map_err(|e| {
-        crate::output::error(&format!("Failed to update models cache: {e}"), output_level);
-        LlmError::unknown(e.to_string())
-    })?;
-
-    crate::output::success(
-        &format!(
-            "Updated {} models for {}",
-            models.len(),
-            client.provider_name()
-        ),
-        output_level,
-    );
-
-    Ok(())
-}
-
-fn _cache_models(cli_config: &CliConfig, provider_name: &str, models: &[String]) -> Result<()> {
-    use std::fs;
-
-    let path = cli_config.data_base_path.join(MODEL_FILE_NAME);
-    // TODO: we shouldn't need to do this here, this should be done while cli_config is created
-    // TODO: Remove if we already do this.
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Load existing cache if present
-    let mut entries = if let Ok(Some(cache)) = load_models_cache(cli_config) {
-        cache.models
-    } else {
-        Vec::new()
-    };
-
-    // Remove all entries for this provider
-    let prefix = format!("{}:", provider_name.to_lowercase());
-    entries.retain(|m| !m.starts_with(&prefix));
-
-    // Add new models for this provider
-    let new_entries: Vec<String> = models
-        .iter()
-        .map(|m| format!("{}:{}", provider_name.to_lowercase(), m))
-        .collect();
-    entries.extend(new_entries);
-
-    let cache = ModelsCache::new(entries);
-    let json = serde_json::to_string_pretty(&cache)?;
-    fs::write(path, json)?;
-    Ok(())
-}
-
 pub(crate) fn load_models_cache(cli_config: &CliConfig) -> Result<Option<ModelsCache>> {
     use std::fs;
 
@@ -313,4 +228,41 @@ pub(crate) fn load_models_cache(cli_config: &CliConfig) -> Result<Option<ModelsC
 
     // Old format doesn't have timestamp info
     Ok(None)
+}
+
+#[derive(Deserialize)]
+struct ModelsDevProvider {
+    models: HashMap<String, ModelsDevModel>,
+}
+
+#[derive(Deserialize)]
+struct ModelsDevModel {
+    id: Option<String>,
+}
+
+async fn fetch_models_from_models_dev(supported_providers: &[String]) -> Result<Vec<String>> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
+
+    let response = client
+        .get("https://models.dev/api.json")
+        .send()
+        .await?
+        .error_for_status()?;
+    let providers: HashMap<String, ModelsDevProvider> = response.json().await?;
+
+    let mut all_models = Vec::new();
+    for provider_id in supported_providers {
+        if let Some(provider) = providers.get(provider_id) {
+            for (model_id, model) in &provider.models {
+                let id = model.id.as_deref().unwrap_or(model_id);
+                all_models.push(format!("{provider_id}:{id}"));
+            }
+        }
+    }
+
+    all_models.sort();
+    all_models.dedup();
+    Ok(all_models)
 }

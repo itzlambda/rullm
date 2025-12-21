@@ -23,20 +23,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Configure OpenAI client from environment
     let client = OpenAIClient::from_env()?;
 
-    // Check available models
-    println!("Available models:");
-    match client.list_models().await {
-        Ok(models) => {
-            for (i, model) in models.iter().take(10).enumerate() {
-                println!("  {}. {}", i + 1, model);
-            }
-            if models.len() > 10 {
-                println!("  ... and {} more", models.len() - 10);
-            }
-        }
-        Err(e) => println!("Error getting models: {e}"),
-    }
-
     // Health check
     match client.health_check().await {
         Ok(_) => println!("✅ Client is healthy\n"),
