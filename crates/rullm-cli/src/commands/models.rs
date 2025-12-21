@@ -3,6 +3,7 @@ use chrono::Utc;
 use clap::{Args, Subcommand};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::time::Duration;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -66,7 +67,7 @@ impl ModelsArgs {
                 }
             }
             ModelsAction::Update => {
-                let supported: Vec<&str> = Provider::iter().map(|p| p.models_dev_id()).collect();
+                let supported: Vec<String> = Provider::iter().map(|p| p.to_string()).collect();
 
                 crate::output::progress("Fetching models from models.dev...", output_level);
 
@@ -236,19 +237,24 @@ struct ModelsDevProvider {
 
 #[derive(Deserialize)]
 struct ModelsDevModel {
-    #[serde(default)]
     id: Option<String>,
 }
 
-async fn fetch_models_from_models_dev(supported_providers: &[&str]) -> Result<Vec<String>> {
-    let response = reqwest::get("https://models.dev/api.json")
+async fn fetch_models_from_models_dev(supported_providers: &[String]) -> Result<Vec<String>> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()?;
+
+    let response = client
+        .get("https://models.dev/api.json")
+        .send()
         .await?
         .error_for_status()?;
     let providers: HashMap<String, ModelsDevProvider> = response.json().await?;
 
     let mut all_models = Vec::new();
     for provider_id in supported_providers {
-        if let Some(provider) = providers.get(*provider_id) {
+        if let Some(provider) = providers.get(provider_id) {
             for (model_id, model) in &provider.models {
                 let id = model.id.as_deref().unwrap_or(model_id);
                 all_models.push(format!("{provider_id}:{id}"));

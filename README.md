@@ -66,7 +66,7 @@ rullm --system "You are a helpful assistant." "Summarize this text"
 # List available models (shows only chat models, with your aliases)
 rullm models list
 
-# Update model list from models.dev (no API keys required)
+# Update model list
 rullm models update
 
 # Manage aliases
