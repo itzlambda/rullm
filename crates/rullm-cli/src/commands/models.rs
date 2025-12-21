@@ -236,17 +236,16 @@ pub async fn update_models(
 
     if models.is_empty() {
         crate::output::error("No models returned by provider", output_level);
-        return Err(LlmError::model("No models returned by provider".to_string()));
+        return Err(LlmError::model(
+            "No models returned by provider".to_string(),
+        ));
     }
 
     models.sort();
     models.dedup();
 
     _cache_models(cli_config, client.provider_name(), &models).map_err(|e| {
-        crate::output::error(
-            &format!("Failed to update models cache: {e}"),
-            output_level,
-        );
+        crate::output::error(&format!("Failed to update models cache: {e}"), output_level);
         LlmError::unknown(e.to_string())
     })?;
 

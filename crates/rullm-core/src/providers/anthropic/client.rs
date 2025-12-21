@@ -206,9 +206,10 @@ impl AnthropicClient {
             ));
         }
 
-        let json: serde_json::Value = response.json().await.map_err(|e| {
-            LlmError::serialization("Failed to parse models response", Box::new(e))
-        })?;
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| LlmError::serialization("Failed to parse models response", Box::new(e)))?;
 
         let models_array = json
             .get("data")

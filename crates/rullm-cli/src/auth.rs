@@ -233,56 +233,6 @@ pub fn get_credential(provider: &Provider, auth_config: &AuthConfig) -> Option<C
     None
 }
 
-/// Get token for a provider, automatically refreshing OAuth tokens if expired.
-///
-/// This is the preferred method for getting tokens as it handles expiration.
-/// If the token is refreshed, the new credential is saved to the config file.
-///
-/// Note: Prefer `get_token_with_type` when you need to know if the credential
-/// is OAuth (to configure different authentication headers).
-#[allow(dead_code)]
-pub async fn get_or_refresh_token(
-    provider: &Provider,
-    auth_config: &mut AuthConfig,
-    config_base_path: &Path,
-) -> Result<String> {
-    // Get credential info
-    let info = get_credential(provider, auth_config)
-        .ok_or_else(|| anyhow::anyhow!("No credential found for {}", provider))?;
-
-    // If from environment, just return the token (can't refresh env vars)
-    if matches!(info.source, CredentialSource::Environment(_)) {
-        return Ok(info.credential.get_token().to_string());
-    }
-
-    // Check if OAuth token is expired
-    if info.credential.is_expired() {
-        if let Some(refresh_tok) = info.credential.refresh_token() {
-            // Attempt to refresh
-            eprintln!("OAuth token expired, refreshing...");
-            match refresh_oauth_token(provider, refresh_tok).await {
-                Ok(new_credential) => {
-                    let token = new_credential.get_token().to_string();
-                    auth_config.set(provider, new_credential);
-                    auth_config.save(config_base_path)?;
-                    eprintln!("Token refreshed successfully.");
-                    return Ok(token);
-                }
-                Err(e) => {
-                    // Refresh failed - user needs to re-authenticate
-                    return Err(anyhow::anyhow!(
-                        "OAuth token expired and refresh failed: {}. Please run 'rullm auth login {}'",
-                        e,
-                        provider
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(info.credential.get_token().to_string())
-}
-
 /// Get token and credential type for a provider.
 ///
 /// Returns (token, is_oauth) where is_oauth is true if the credential is OAuth.
