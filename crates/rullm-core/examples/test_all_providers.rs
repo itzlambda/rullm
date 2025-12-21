@@ -1,7 +1,7 @@
-use rullm_core::config::{AnthropicConfig, GoogleAiConfig, OpenAIConfig};
-use rullm_core::providers::anthropic::AnthropicClient;
-use rullm_core::providers::google::GoogleClient;
+use rullm_core::providers::anthropic::{AnthropicClient, AnthropicConfig};
+use rullm_core::providers::google::{GoogleAiConfig, GoogleClient};
 use rullm_core::providers::openai::OpenAIClient;
+use rullm_core::providers::openai_compatible::OpenAIConfig;
 use std::env;
 
 #[tokio::main]
@@ -37,12 +37,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Test Anthropic Provider
     println!("🔍 Testing Anthropic Provider...");
     match test_anthropic_provider().await {
-        Ok(model_count) => {
+        Ok(models) => {
+            println!("✅ Anthropic: Found {} models", models.len());
             println!(
-                "✅ Anthropic: API is working ({} models available)",
-                model_count
+                "   Models (first 5): {}",
+                models
+                    .iter()
+                    .take(5)
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
-            results.push(("Anthropic", true, model_count));
+            results.push(("Anthropic", true, models.len()));
         }
         Err(e) => {
             println!("❌ Anthropic: Failed - {e}");
@@ -133,7 +139,7 @@ async fn test_openai_provider() -> Result<Vec<String>, Box<dyn std::error::Error
     Ok(models)
 }
 
-async fn test_anthropic_provider() -> Result<usize, Box<dyn std::error::Error>> {
+async fn test_anthropic_provider() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let api_key = env::var("ANTHROPIC_API_KEY")
         .map_err(|_| "ANTHROPIC_API_KEY environment variable not set")?;
 
@@ -146,19 +152,10 @@ async fn test_anthropic_provider() -> Result<usize, Box<dyn std::error::Error>> 
         Err(e) => println!("   Health check: ⚠️  Warning - {e}"),
     }
 
-    // Anthropic doesn't have a list models endpoint, so we'll just return known models
-    let known_models = vec![
-        "claude-3-5-sonnet-20241022",
-        "claude-3-opus-20240229",
-        "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307",
-    ];
+    // Get available models
+    let models = client.list_models().await?;
 
-    for model in &known_models {
-        println!("   Known model: {model}");
-    }
-
-    Ok(known_models.len())
+    Ok(models)
 }
 
 async fn test_google_provider() -> Result<Vec<String>, Box<dyn std::error::Error>> {

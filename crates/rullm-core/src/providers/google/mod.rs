@@ -22,7 +22,9 @@
 //! ```
 
 pub mod client;
+pub mod config;
 pub mod types;
 
 pub use client::GoogleClient;
+pub use config::GoogleAiConfig;
 pub use types::*;

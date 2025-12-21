@@ -154,16 +154,10 @@ pub mod error;
 pub mod providers;
 pub mod utils;
 
-#[cfg(test)]
-mod tests;
-
 // Concrete client exports
 pub use providers::{AnthropicClient, GoogleClient, OpenAIClient, OpenAICompatibleProvider};
 
-pub use config::{
-    AnthropicConfig, ConfigBuilder, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig,
-    ProviderConfig,
-};
+pub use config::{ConfigBuilder, HttpProviderConfig, ProviderConfig};
 pub use error::LlmError;
 pub use utils::sse::sse_lines;
 

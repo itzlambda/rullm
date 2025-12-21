@@ -76,7 +76,7 @@ impl ModelsArgs {
                     let provider = format!("{provider}");
                     // Try to create a client for this provider
                     let model_hint = format!("{provider}:dummy"); // dummy model name, just to get the client
-                    let client = match client::from_model(&model_hint, cli, cli_config) {
+                    let client = match client::from_model(&model_hint, cli, cli_config).await {
                         Ok(c) => c,
                         Err(_) => {
                             skipped.push(provider);
@@ -217,7 +217,7 @@ pub fn clear_models_cache(cli_config: &CliConfig, output_level: OutputLevel) -> 
 }
 
 pub async fn update_models(
-    _cli_config: &mut CliConfig,
+    cli_config: &mut CliConfig,
     client: &CliClient,
     output_level: OutputLevel,
 ) -> Result<(), LlmError> {
@@ -229,15 +229,36 @@ pub async fn update_models(
         output_level,
     );
 
-    // TODO: Implement models() method on CliClient
-    // For now, just return an error
-    crate::output::error(
-        "Fetching models not yet implemented for new client architecture",
+    let mut models = client.available_models().await.map_err(|e| {
+        crate::output::error(&format!("Failed to fetch models: {e}"), output_level);
+        e
+    })?;
+
+    if models.is_empty() {
+        crate::output::error("No models returned by provider", output_level);
+        return Err(LlmError::model(
+            "No models returned by provider".to_string(),
+        ));
+    }
+
+    models.sort();
+    models.dedup();
+
+    _cache_models(cli_config, client.provider_name(), &models).map_err(|e| {
+        crate::output::error(&format!("Failed to update models cache: {e}"), output_level);
+        LlmError::unknown(e.to_string())
+    })?;
+
+    crate::output::success(
+        &format!(
+            "Updated {} models for {}",
+            models.len(),
+            client.provider_name()
+        ),
         output_level,
     );
-    Err(LlmError::unknown(
-        "Models fetching not yet implemented".to_string(),
-    ))
+
+    Ok(())
 }
 
 fn _cache_models(cli_config: &CliConfig, provider_name: &str, models: &[String]) -> Result<()> {

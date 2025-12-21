@@ -1,5 +1,6 @@
+use super::config::GoogleAiConfig;
 use super::types::*;
-use crate::config::{GoogleAiConfig, ProviderConfig};
+use crate::config::ProviderConfig;
 use crate::error::LlmError;
 use crate::utils::sse::sse_lines;
 use futures::Stream;

@@ -28,11 +28,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event_result) = stream.next().await {
         match event_result {
             Ok(event) => match event {
-                StreamEvent::ContentBlockDelta { delta, .. } => {
-                    if let Delta::TextDelta { text } = delta {
-                        print!("{text}");
-                        std::io::Write::flush(&mut std::io::stdout())?;
-                    }
+                StreamEvent::ContentBlockDelta {
+                    delta: Delta::TextDelta { text },
+                    ..
+                } => {
+                    print!("{text}");
+                    std::io::Write::flush(&mut std::io::stdout())?;
                 }
                 StreamEvent::MessageStop => {
                     println!("\n✅ Stream completed successfully");
@@ -73,11 +74,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event_result) = conversation_stream.next().await {
         match event_result {
             Ok(event) => match event {
-                StreamEvent::ContentBlockDelta { delta, .. } => {
-                    if let Delta::TextDelta { text } = delta {
-                        print!("{text}");
-                        std::io::Write::flush(&mut std::io::stdout())?;
-                    }
+                StreamEvent::ContentBlockDelta {
+                    delta: Delta::TextDelta { text },
+                    ..
+                } => {
+                    print!("{text}");
+                    std::io::Write::flush(&mut std::io::stdout())?;
                 }
                 StreamEvent::MessageStop => {
                     println!("\n✅ Philosophical stream completed");
@@ -116,12 +118,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event_result) = creative_stream.next().await {
         match event_result {
             Ok(event) => match event {
-                StreamEvent::ContentBlockDelta { delta, .. } => {
-                    if let Delta::TextDelta { text } = delta {
-                        print!("{text}");
-                        std::io::Write::flush(&mut std::io::stdout())?;
-                        char_count += text.len();
-                    }
+                StreamEvent::ContentBlockDelta {
+                    delta: Delta::TextDelta { text },
+                    ..
+                } => {
+                    print!("{text}");
+                    std::io::Write::flush(&mut std::io::stdout())?;
+                    char_count += text.len();
                 }
                 StreamEvent::MessageStop => {
                     println!("\n✅ Story completed (~{char_count} characters)");
@@ -158,11 +161,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event_result) = code_stream.next().await {
         match event_result {
             Ok(event) => match event {
-                StreamEvent::ContentBlockDelta { delta, .. } => {
-                    if let Delta::TextDelta { text } = delta {
-                        print!("{text}");
-                        std::io::Write::flush(&mut std::io::stdout())?;
-                    }
+                StreamEvent::ContentBlockDelta {
+                    delta: Delta::TextDelta { text },
+                    ..
+                } => {
+                    print!("{text}");
+                    std::io::Write::flush(&mut std::io::stdout())?;
                 }
                 StreamEvent::MessageStop => {
                     println!("\n✅ Code explanation completed");
@@ -195,10 +199,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             while let Some(event_result) = error_stream.next().await {
                 match event_result {
                     Ok(event) => match event {
-                        StreamEvent::ContentBlockDelta { delta, .. } => {
-                            if let Delta::TextDelta { text } = delta {
-                                print!("{text}");
-                            }
+                        StreamEvent::ContentBlockDelta {
+                            delta: Delta::TextDelta { text },
+                            ..
+                        } => {
+                            print!("{text}");
                         }
                         StreamEvent::Error { error } => {
                             println!("📡 Stream error event (as expected): {}", error.message);

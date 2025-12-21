@@ -35,11 +35,11 @@ impl ChatArgs {
     pub async fn run(
         &self,
         _output_level: OutputLevel,
-        cli_config: &CliConfig,
+        cli_config: &mut CliConfig,
         cli: &Cli,
     ) -> Result<()> {
         let model_str = resolve_model(&cli.model, &self.model, &cli_config.config.default_model)?;
-        let client = client::from_model(&model_str, cli, cli_config)?;
+        let client = client::from_model(&model_str, cli, cli_config).await?;
         run_interactive_chat(&client, None, cli_config, !cli.no_streaming).await?;
         Ok(())
     }

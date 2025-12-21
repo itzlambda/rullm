@@ -1,7 +1,8 @@
-use rullm_core::config::{OpenAIConfig, ProviderConfig};
+use rullm_core::config::ProviderConfig;
 use rullm_core::providers::openai::{
     ChatCompletionRequest, ChatMessage, ContentPart, MessageContent, OpenAIClient,
 };
+use rullm_core::providers::openai_compatible::OpenAIConfig;
 
 // Helper to extract text from MessageContent
 fn extract_text(content: &MessageContent) -> String {

@@ -4,11 +4,37 @@
 //! basic chat operations without exposing the full complexity of each provider's API.
 
 use futures::StreamExt;
-use rullm_core::config::{AnthropicConfig, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig};
 use rullm_core::error::LlmError;
-use rullm_core::providers::openai_compatible::{OpenAICompatibleProvider, identities};
+use rullm_core::providers::anthropic::AnthropicConfig;
+use rullm_core::providers::google::GoogleAiConfig;
+use rullm_core::providers::openai_compatible::{
+    OpenAICompatibleConfig, OpenAICompatibleProvider, OpenAIConfig, identities,
+};
 use rullm_core::providers::{AnthropicClient, GoogleClient, OpenAIClient};
 use std::pin::Pin;
+
+/// Claude Code identification text for OAuth requests
+const CLAUDE_CODE_SPOOF_TEXT: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/// Prepend Claude Code system block to an existing system prompt (for OAuth requests)
+fn prepend_claude_code_system(
+    existing: Option<rullm_core::providers::anthropic::SystemPrompt>,
+) -> rullm_core::providers::anthropic::SystemPrompt {
+    use rullm_core::providers::anthropic::{SystemBlock, SystemPrompt};
+
+    let spoof_block = SystemBlock::text_with_cache(CLAUDE_CODE_SPOOF_TEXT);
+
+    match existing {
+        None => SystemPrompt::Blocks(vec![spoof_block]),
+        Some(SystemPrompt::Text(text)) => {
+            SystemPrompt::Blocks(vec![spoof_block, SystemBlock::text(text)])
+        }
+        Some(SystemPrompt::Blocks(mut blocks)) => {
+            blocks.insert(0, spoof_block);
+            SystemPrompt::Blocks(blocks)
+        }
+    }
+}
 
 /// Simple configuration for CLI adapter
 #[derive(Debug, Clone, Default)]
@@ -28,6 +54,7 @@ pub enum CliClient {
         client: AnthropicClient,
         model: String,
         config: CliConfig,
+        is_oauth: bool,
     },
     Google {
         client: GoogleClient,
@@ -67,13 +94,15 @@ impl CliClient {
         api_key: impl Into<String>,
         model: impl Into<String>,
         config: CliConfig,
+        use_oauth: bool,
     ) -> Result<Self, LlmError> {
-        let client_config = AnthropicConfig::new(api_key);
+        let client_config = AnthropicConfig::new(api_key).with_oauth(use_oauth);
         let client = AnthropicClient::new(client_config)?;
         Ok(Self::Anthropic {
             client,
             model: model.into(),
             config,
+            is_oauth: use_oauth,
         })
     }
 
@@ -159,6 +188,7 @@ impl CliClient {
                 client,
                 model,
                 config,
+                is_oauth,
             } => {
                 use rullm_core::providers::anthropic::{Message, MessagesRequest};
 
@@ -168,6 +198,10 @@ impl CliClient {
 
                 if let Some(temp) = config.temperature {
                     request.temperature = Some(temp);
+                }
+
+                if *is_oauth {
+                    request.system = Some(prepend_claude_code_system(request.system.take()));
                 }
 
                 let response = client.messages(request).await?;
@@ -315,6 +349,7 @@ impl CliClient {
                 client,
                 model,
                 config,
+                is_oauth,
             } => {
                 use rullm_core::providers::anthropic::{Message, MessagesRequest};
 
@@ -333,6 +368,10 @@ impl CliClient {
                 let mut request = MessagesRequest::new(model, msgs, max_tokens);
                 if let Some(temp) = config.temperature {
                     request.temperature = Some(temp);
+                }
+
+                if *is_oauth {
+                    request.system = Some(prepend_claude_code_system(request.system.take()));
                 }
 
                 let stream = client.messages_stream(request).await?;
@@ -443,6 +482,18 @@ impl CliClient {
                         Err(e) => Some(Err(e)),
                     }
                 })))
+            }
+        }
+    }
+
+    /// Get available models for the provider
+    pub async fn available_models(&self) -> Result<Vec<String>, LlmError> {
+        match self {
+            Self::OpenAI { client, .. } => client.list_models().await,
+            Self::Anthropic { client, .. } => client.list_models().await,
+            Self::Google { client, .. } => client.list_models().await,
+            Self::Groq { client, .. } | Self::OpenRouter { client, .. } => {
+                client.available_models().await
             }
         }
     }

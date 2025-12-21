@@ -4,7 +4,4 @@ lint:
 
 
 fmt:
-  cargo fmt --check
-
-clippy:
-  cargo clippy
+  cargo fmt

@@ -6,11 +6,11 @@ use clap_complete::CompletionCandidate;
 use clap_complete::engine::ArgValueCompleter;
 use std::ffi::OsStr;
 
-use crate::api_keys::ApiKeys;
+use crate::auth::AuthConfig;
 use crate::commands::models::load_models_cache;
 use crate::commands::{Commands, ModelsCache};
 use crate::config::{self, Config};
-use crate::constants::{BINARY_NAME, KEYS_CONFIG_FILE};
+use crate::constants::BINARY_NAME;
 use crate::templates::TemplateStore;
 
 // Example strings for after_long_help
@@ -85,7 +85,7 @@ pub struct CliConfig {
     pub data_base_path: PathBuf,
     pub config: Config,
     pub models: Models,
-    pub api_keys: ApiKeys,
+    pub auth_config: AuthConfig,
 }
 
 impl CliConfig {
@@ -97,21 +97,15 @@ impl CliConfig {
 
         let config = config::Config::load(&config_base_path).unwrap();
         let models = Models::load(&data_base_path).unwrap();
-        let api_keys =
-            ApiKeys::load_from_file(config_base_path.join(KEYS_CONFIG_FILE)).unwrap_or_default();
+        let auth_config = AuthConfig::load(&config_base_path).unwrap_or_default();
 
         Self {
             config_base_path,
             data_base_path,
             config,
             models,
-            api_keys,
+            auth_config,
         }
-    }
-
-    pub fn save_api_keys(&self) -> Result<(), rullm_core::error::LlmError> {
-        let keys_path = self.config_base_path.join(KEYS_CONFIG_FILE);
-        self.api_keys.save_to_file(&keys_path)
     }
 }
 
