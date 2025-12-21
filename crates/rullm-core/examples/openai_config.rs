@@ -72,20 +72,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 Err(e) => println!("   ❌ Health check failed: {e}"),
                             }
 
-                            // Get available models
-                            match client.list_models().await {
-                                Ok(models) => {
-                                    println!("   Available models (first 5):");
-                                    for (i, model) in models.iter().take(5).enumerate() {
-                                        println!("     {}. {}", i + 1, model);
-                                    }
-                                    if models.len() > 5 {
-                                        println!("     ... and {} more", models.len() - 5);
-                                    }
-                                }
-                                Err(e) => println!("   ❌ Error getting models: {e}"),
-                            }
-
                             // Make a simple request
                             println!("\n   Testing chat completion...");
                             let mut test_request = ChatCompletionRequest::new(

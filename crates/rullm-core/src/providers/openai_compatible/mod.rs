@@ -200,61 +200,6 @@ impl OpenAICompatibleProvider {
         })
     }
 
-    /// Get list of available models
-    pub async fn available_models(&self) -> Result<Vec<String>, LlmError> {
-        let url = format!("{}/models", self.config.base_url());
-
-        let mut req = self.client.get(&url);
-        for (key, value) in self.config.headers() {
-            req = req.header(&key, &value);
-        }
-        let resp = req.send().await?;
-
-        if !resp.status().is_success() {
-            return Err(LlmError::api(
-                self.identity.name,
-                "Failed to fetch available models",
-                Some(resp.status().to_string()),
-                None,
-            ));
-        }
-
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| LlmError::serialization("Failed to parse models response", Box::new(e)))?;
-
-        let models_array = json.get("data").and_then(|d| d.as_array()).ok_or_else(|| {
-            LlmError::serialization(
-                "Invalid models response format",
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Missing data array",
-                )),
-            )
-        })?;
-
-        let models: Vec<String> = models_array
-            .iter()
-            .filter_map(|m| {
-                m.get("id")
-                    .and_then(|id| id.as_str())
-                    .map(|s| s.to_string())
-            })
-            .collect();
-
-        if models.is_empty() {
-            return Err(LlmError::api(
-                self.identity.name,
-                "No models found in response",
-                None,
-                None,
-            ));
-        }
-
-        Ok(models)
-    }
-
     /// Health check
     pub async fn health_check(&self) -> Result<(), LlmError> {
         let url = format!("{}/models", self.config.base_url());

@@ -348,7 +348,6 @@ match provider.chat_completion(request).await {
 
 - **`provider.chat_completion(request)`** - Send chat completion
 - **`provider.health_check()`** - Test API connectivity
-- **`provider.available_models()`** - Get supported models
 - **`config.validate()`** - Validate configuration
 
 ### Supported Models
@@ -391,7 +390,7 @@ match provider.chat_completion(request).await {
 
 ## Test All Providers (`test_all_providers.rs`)
 
-Comprehensive test that validates all LLM providers and their `available_models` functionality:
+Comprehensive test that validates all LLM providers with health checks:
 
 ```bash
 # Set up your API keys
@@ -405,31 +404,26 @@ cargo run --example test_all_providers
 
 **Features:**
 - Tests OpenAI, Anthropic, and Google providers
-- Calls `available_models()` for each provider
-- Validates expected model patterns
 - Performs health checks
 - Provides detailed success/failure reporting
 - Gracefully handles missing API keys
 
 **Sample Output:**
 ```
-🚀 Testing All LLM Providers and Their Available Models
+🚀 Testing All LLM Providers
 
 🔍 Testing OpenAI Provider...
-   Provider name: openai
    Health check: ✅ Passed
-   Expected model 'gpt-4': ✅ Found
-   Expected model 'gpt-3.5-turbo': ✅ Found
-✅ OpenAI: Found 5 models
+✅ OpenAI: Health check passed
 
 📊 SUMMARY:
-┌─────────────┬────────┬─────────────┐
-│ Provider    │ Status │ Models      │
-├─────────────┼────────┼─────────────┤
-│ OpenAI      │ ✅ Pass │ 5 models    │
-│ Anthropic   │ ✅ Pass │ 5 models    │
-│ Google      │ ✅ Pass │ 5 models    │
-└─────────────┴────────┴─────────────┘
+┌─────────────┬────────┐
+│ Provider    │ Status │
+├─────────────┼────────┤
+│ OpenAI      │ ✅ Pass │
+│ Anthropic   │ ✅ Pass │
+│ Google      │ ✅ Pass │
+└─────────────┴────────┘
 
 🎉 All providers are working correctly!
 ```

@@ -121,17 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         creative_response.choices[0].finish_reason
     );
 
-    // 6. List models
-    println!("\n📋 Available models:");
-    let models = client.list_models().await?;
-    for (i, model) in models.iter().take(5).enumerate() {
-        println!("  {}. {}", i + 1, model);
-    }
-    if models.len() > 5 {
-        println!("  ... and {} more", models.len() - 5);
-    }
-
-    // 7. Health check
+    // 6. Health check
     match client.health_check().await {
         Ok(_) => println!("\n✅ OpenAI API is healthy"),
         Err(e) => println!("\n❌ Health check failed: {e}"),

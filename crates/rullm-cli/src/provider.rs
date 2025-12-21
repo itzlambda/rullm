@@ -90,4 +90,14 @@ impl Provider {
             Provider::Google => "GOOGLE_AI_API_KEY",
         }
     }
+
+    pub fn models_dev_id(&self) -> &'static str {
+        match self {
+            Provider::OpenAI => "openai",
+            Provider::Groq => "groq",
+            Provider::OpenRouter => "openrouter",
+            Provider::Anthropic => "anthropic",
+            Provider::Google => "google",
+        }
+    }
 }

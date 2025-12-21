@@ -144,56 +144,6 @@ impl GoogleClient {
         })))
     }
 
-    /// List available models
-    pub async fn list_models(&self) -> Result<Vec<String>, LlmError> {
-        let url = format!("{}/models?key={}", self.base_url, self.config.api_key());
-
-        let mut req = self.client.get(&url);
-        for (key, value) in self.config.headers() {
-            req = req.header(key, value);
-        }
-
-        let response = req.send().await?;
-
-        if !response.status().is_success() {
-            return Err(LlmError::api(
-                "google",
-                "Failed to fetch available models",
-                Some(response.status().to_string()),
-                None,
-            ));
-        }
-
-        let json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| LlmError::serialization("Failed to parse models response", Box::new(e)))?;
-
-        let models_array = json
-            .get("models")
-            .and_then(|m| m.as_array())
-            .ok_or_else(|| {
-                LlmError::serialization(
-                    "Invalid models response format",
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "Missing models array",
-                    )),
-                )
-            })?;
-
-        let models: Vec<String> = models_array
-            .iter()
-            .filter_map(|m| {
-                m.get("name")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.split('/').next_back().unwrap_or(s).to_string())
-            })
-            .collect();
-
-        Ok(models)
-    }
-
     /// Health check
     pub async fn health_check(&self) -> Result<(), LlmError> {
         let url = format!("{}/models?key={}", self.base_url, self.config.api_key());
