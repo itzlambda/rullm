@@ -1,0 +1,7 @@
+[package]
+name = "rullm-anthropic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]

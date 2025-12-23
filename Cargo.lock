@@ -1724,6 +1724,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rullm-anthropic"
+version = "0.1.0"
+
+[[package]]
+name = "rullm-chat-completion"
+version = "0.1.0"
+
+[[package]]
 name = "rullm-cli"
 version = "0.1.0"
 dependencies = [
@@ -1782,6 +1790,10 @@ dependencies = [
  "tower-service",
  "tracing-subscriber",
 ]
+
+[[package]]
+name = "rullm-gemini"
+version = "0.1.0"
 
 [[package]]
 name = "rustc-demangle"
