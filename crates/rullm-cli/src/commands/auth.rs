@@ -20,12 +20,12 @@ pub struct AuthArgs {
 pub enum AuthAction {
     /// Login to a provider (OAuth or API key)
     Login {
-        /// Provider name (anthropic, openai, groq, openrouter)
+        /// Provider name (anthropic, openai, groq, openrouter, gemini)
         provider: Option<Provider>,
     },
     /// Logout from a provider (remove stored credentials)
     Logout {
-        /// Provider name (anthropic, openai, groq, openrouter)
+        /// Provider name (anthropic, openai, groq, openrouter, gemini)
         provider: Option<Provider>,
     },
     /// List all credentials and environment variables
