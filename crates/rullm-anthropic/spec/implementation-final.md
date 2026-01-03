@@ -1,11 +1,9 @@
 # Anthropic Messages Rust Client - Implementation Design
 
 This document proposes an idiomatic Rust client for the Anthropic Messages API.
-The Messages API is Anthropic-specific, but some gateways expose Anthropic-compatible
-endpoints; the design keeps an optional compat layer for that case. It is based on
-`spec/message-api.md`, `spec/implementation.md`, and patterns in rullm-core. The
-design emphasizes ergonomic builders, strong typing, streaming helpers, and clean
-error handling.
+It is based on `spec/message-api.md`, `spec/implementation.md`, and patterns in
+rullm-core. The design emphasizes ergonomic builders, strong typing, streaming
+helpers, and clean error handling.
 
 ## 1) Goals and non-goals
 
@@ -13,8 +11,6 @@ Goals
 - Feature parity with official Anthropic SDKs for the Messages API.
 - Excellent developer experience: easy defaults, expressive builders, helpers for
   common tasks, and easy streaming consumption.
-- Optional compat ergonomics for Anthropic-compatible gateways (not a claim that
-  other providers natively use the Messages API).
 - Forward compatibility: tolerate unknown enum values and fields.
 
 Non-goals (initial release)
@@ -34,8 +30,6 @@ crates/rullm-anthropic/src/
     stream.rs      // SSE parsing + accumulator
   models.rs        // list/get models
   batches.rs       // create/get/list/cancel/delete/results
-  completions.rs   // legacy API
-  compat.rs        // optional compat types + conversions (Anthropic-compatible gateways)
   transport.rs     // HttpTransport trait + reqwest impl
   lib.rs           // re-exports
 ```
@@ -82,32 +76,11 @@ provider APIs differ):
 - `extra_query: Vec<(Arc<str>, Arc<str>)>`
 - `extra_body: serde_json::Map<String, Value>`
 
-This mirrors `extra_headers/extra_query/extra_body` patterns in other SDKs and
-makes the client usable with Anthropic-compatible gateways.
+This mirrors `extra_headers/extra_query/extra_body` patterns in other SDKs.
 
-## 4) Optional compat types (Anthropic-compatible gateways)
+## 4) Messages API surface
 
-The client can expose a minimal common interface for applications that talk to
-Anthropic-compatible gateways. This is useful when the same app targets multiple
-providers through a gateway that accepts the Anthropic Messages API format.
-
-Proposed compat types (align with rullm-core):
-- `ChatRole` (System/User/Assistant/Tool)
-- `ChatMessage { role, content }`
-- `ChatRequest { messages, temperature, max_tokens, top_p, stream }`
-- `ChatResponse { message, model, usage, finish_reason }`
-- `ChatStreamEvent { Token(String), Done, Error(String) }`
-
-Conversions:
-- `impl From<MessagesRequest> for ChatRequest` (best-effort mapping)
-- `impl TryFrom<ChatRequest> for MessagesRequest` (errors if unsupported fields)
-- `impl From<MessagesResponse> for ChatResponse` (extract first text block)
-
-This keeps Anthropic ergonomics while enabling Anthropic-compatible gateway use.
-
-## 5) Messages API surface
-
-### 5.1 Primary entry points
+### 4.1 Primary entry points
 Expose a sub-client similar to official SDKs:
 
 - `Client::messages()` -> `MessagesClient`
@@ -116,7 +89,7 @@ Expose a sub-client similar to official SDKs:
 - `MessagesClient::count_tokens(req, opts)` -> `CountTokensResponse`
 - `MessagesClient::batches()` -> `BatchesClient`
 
-### 5.2 Builder ergonomics
+### 4.2 Builder ergonomics
 Provide a builder for the request that favors clarity:
 
 ```
@@ -133,7 +106,7 @@ Design notes
 - Accept `system` as `SystemContent` (string or text blocks).
 - `messages` accept `MessageContent` (string shorthand or blocks).
 
-### 5.3 Type modeling overview
+### 4.3 Type modeling overview
 
 Request
 - `MessagesRequest { model, max_tokens, messages, system?, metadata?, stop_sequences?, temperature?, top_p?, top_k?, tools?, tool_choice?, thinking?, service_tier?, stream? }`
@@ -145,9 +118,9 @@ Use `serde` tagging:
 - `#[serde(tag = "type", rename_all = "snake_case")]` for content blocks
 - `#[serde(untagged)]` for `string | [blocks]` unions
 
-## 6) Content blocks and tools
+## 5) Content blocks and tools
 
-### 6.1 ContentBlockParam (input)
+### 5.1 ContentBlockParam (input)
 Support all common and advanced blocks:
 - `text`
 - `image` (base64 or url)
@@ -157,12 +130,12 @@ Support all common and advanced blocks:
 - advanced: `tool_use`, `server_tool_use`, `web_search_tool_result`,
   `thinking`, `redacted_thinking`
 
-### 6.2 ContentBlock (output)
+### 5.2 ContentBlock (output)
 Support output blocks:
 - `text`, `tool_use`, `thinking`, `redacted_thinking`, `server_tool_use`,
   `web_search_tool_result`
 
-### 6.3 Tools
+### 5.3 Tools
 Use a union for custom and server tools:
 - Custom: `{ name, description?, input_schema }`
 - Server tools: `bash_20250124`, `text_editor_20250124/20250429/20250728`,
@@ -172,9 +145,9 @@ Tool choice union:
 - `auto | any | none | tool(name)`
 - `disable_parallel_tool_use: bool`
 
-## 7) Streaming design
+## 6) Streaming design
 
-### 7.1 Raw SSE
+### 6.1 Raw SSE
 Streaming uses SSE with event `type`:
 - `message_start`
 - `content_block_start`
@@ -189,7 +162,7 @@ Implement a tolerant SSE parser:
 - stop on stream close
 - surface JSON parse errors as `AnthropicError::Serialization`
 
-### 7.2 MessageStream helper
+### 6.2 MessageStream helper
 Provide a higher-level stream wrapper that merges deltas into a full message.
 
 Proposed API:
@@ -202,7 +175,7 @@ Use a `MessageAccumulator` internally:
 - merge tool input JSON fragments
 - update usage/stop_reason
 
-### 7.3 Tool input JSON deltas
+### 6.3 Tool input JSON deltas
 Maintain both:
 - `partial_json: String`
 - `parsed: Option<Value>` (best-effort)
@@ -215,7 +188,7 @@ Parsing strategy:
 This avoids a hard dependency on a partial JSON parser while still offering
 useful intermediate values.
 
-## 8) Timeout policy
+## 7) Timeout policy
 
 The official SDKs enforce a non-streaming timeout policy. Mirror it:
 
@@ -230,7 +203,7 @@ Expose this as:
 
 Allow opt-out via `RequestOptions::allow_long_non_streaming`.
 
-## 9) Error handling
+## 8) Error handling
 
 Use a structured error enum and preserve request_id:
 
@@ -249,7 +222,7 @@ enum AnthropicError {
 
 Always surface `request-id` header in errors and responses.
 
-## 10) Rust ergonomics and idioms
+## 9) Rust ergonomics and idioms
 
 - Avoid panics in library code. No `unwrap`/`expect` in production paths.
 - Use `Arc<str>` and `Arc<[T]>` for immutable data cloned often.
@@ -257,7 +230,7 @@ Always surface `request-id` header in errors and responses.
 - Provide `Option<&T>` accessors instead of `&Option<T>`.
 - Use `&str`/`&[T]` in accessors instead of `&String`/`&Vec<T>`.
 
-## 11) Example usage (final API shape)
+## 10) Example usage (final API shape)
 
 Non-streaming:
 ```
@@ -283,16 +256,3 @@ while let Some(chunk) = s.next().await {
 }
 let final_msg = stream.final_message().await?;
 ```
-
-## 12) Implementation notes for Anthropic-compatible gateways
-
-To keep this client usable with Anthropic-compatible gateways:
-- Keep `RequestOptions`, `ClientBuilder`, and `transport::HttpTransport` in a
-  familiar shape across rullm crates.
-- Provide `compat` conversions (ChatRequest/ChatResponse) for apps that target
-  a gateway exposing the Anthropic Messages API.
-- Keep the `MessageStream` API consistent (text_stream + final_message).
-
-This yields a cohesive developer experience across Anthropic and any gateway
-that implements the Anthropic Messages API while still exposing full Anthropic
-functionality.

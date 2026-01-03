@@ -1,9 +1,10 @@
-# Idiomatic Rust Client Design for OpenAI Chat Completions (Multi-Provider)
+# Idiomatic Rust Client Design for OpenAI Chat Completions (Core API)
 
 This document defines a Rust client design for the OpenAI **Chat Completions**
-API with first-class support for OpenAI-compatible providers (OpenRouter,
-Gemini, Groq, xAI, MoonshotAI). It prioritizes developer experience, forward
-compatibility, and graceful handling of provider differences.
+API with a provider-agnostic core that can target any OpenAI-compatible endpoint.
+It prioritizes developer experience, forward compatibility, and flexible
+authentication/header handling. Provider-specific capability gating is left to
+higher-level crates.
 
 This is a design spec only. It references the request/response shapes and
 compatibility notes in `spec/chat-completion*.md`.
@@ -17,7 +18,8 @@ compatibility notes in `spec/chat-completion*.md`.
 - Full coverage of Chat Completions parameters and response shapes.
 - Streaming support with correct SSE parsing and delta accumulation.
 - Forward-compatible JSON decoding (unknown fields and enum values tolerated).
-- Provider-aware parameter handling with graceful degradation.
+- Flexible authentication and extra headers.
+- Provider-agnostic core (no built-in provider profiles or capability gating).
 - Clean integration with Rust async ecosystems.
 
 **Non-Goals**
@@ -33,11 +35,10 @@ compatibility notes in `spec/chat-completion*.md`.
 crates/rullm-openai/
   src/
     client.rs          // ChatCompletionsClient + HTTP wiring
-    config.rs          // ClientConfig, ProviderProfile, CapabilityResolver
+    config.rs          // ClientConfig, auth + headers
     types.rs           // Request/response structs, message/content/tool types
     streaming.rs       // SSE decoder + ChatCompletionStream + accumulator
     error.rs           // Error types + retry classification
-    compat.rs          // Parameter policy + capability rules
     util.rs            // Small helpers (headers, url, serialization)
 ```
 
@@ -64,14 +65,6 @@ impl ChatCompletionsClient {
         &self,
         req: ChatCompletionRequest,
     ) -> Result<ChatCompletionStream, ClientError>;
-
-    // Stored completions (OpenAI only; gated by capability profile)
-    pub async fn retrieve(&self, id: &str) -> Result<ApiResponse<ChatCompletion>, ClientError>;
-    pub async fn list(&self, params: ListParams) -> Result<ApiResponse<ChatCompletionList>, ClientError>;
-    pub async fn update(&self, id: &str, params: UpdateParams) -> Result<ApiResponse<ChatCompletion>, ClientError>;
-    pub async fn delete(&self, id: &str) -> Result<ApiResponse<DeleteResponse>, ClientError>;
-    pub async fn list_messages(&self, id: &str, params: ListParams)
-        -> Result<ApiResponse<ChatMessageList>, ClientError>;
 
     // DX convenience
     pub fn chat(&self) -> ChatRequestBuilder;
@@ -104,69 +97,35 @@ Design notes:
 
 ---
 
-## 4) Configuration and Provider Profiles
+## 4) Configuration and Authentication
 
 ### 4.1 ClientConfig
 
 ```
 pub struct ClientConfig {
-    pub api_key: Arc<str>,
     pub base_url: Url,
+    pub auth: AuthConfig,
     pub default_headers: HeaderMap,
     pub timeout: Duration,
-    pub provider: ProviderProfile,
-    pub parameter_policy: ParameterPolicy,
-    pub capability_resolver: Arc<dyn CapabilityResolver>,
 }
 ```
 
-### 4.2 ProviderProfile (Built-in)
-
-`ProviderProfile` supplies defaults and capability constraints.
+### 4.2 AuthConfig
 
 ```
-pub enum ProviderKind { OpenAI, OpenRouter, Gemini, Groq, Xai, Moonshot, Custom }
-
-pub struct ProviderProfile {
-    pub kind: ProviderKind,
-    pub base_url: Url,
-    pub supports_stored_completions: bool,
-    pub capabilities: Capabilities,
-    pub model_rules: Vec<ModelRule>,
+pub enum AuthConfig {
+    None,
+    BearerToken(Arc<str>),
+    Header { name: HeaderName, value: HeaderValue },
+    QueryParam { name: Arc<str>, value: Arc<str> },
 }
 ```
 
-**Built-in profiles** include known constraints (from
-`chat-completion-difference.md`):
-- Groq: `n=1`, no logprobs, JSON mode cannot stream.
-- Gemini: no logprobs, stricter schema validation.
-- xAI: reasoning models disallow penalties and stop; no JSON streaming.
-- Moonshot: temperature max 1.0, image URLs base64 only.
-- OpenRouter: accepts most params, adds comment SSE lines.
-
-### 4.3 CapabilityResolver
-
-```
-pub trait CapabilityResolver: Send + Sync {
-    fn capabilities_for(&self, model: &ModelId) -> Capabilities;
-}
-```
-
-`Capabilities` is a simple struct with booleans + numeric limits, e.g.
-`supports_logprobs`, `supports_streaming_json`, `temperature_max`, `supports_n`.
-
-### 4.4 ParameterPolicy
-
-```
-pub enum ParameterPolicy {
-    StrictError,       // reject unsupported parameters
-    WarnAndStrip,      // drop unsupported parameters and emit warnings
-    PassThrough,       // send as-is (let server reject)
-}
-```
-
-The client emits a `CompatibilityReport` (warnings, applied transforms) via
-`ApiResponse::meta` so users can log or test for mismatches.
+Notes:
+- Use `default_headers` for extra headers (e.g., `OpenAI-Organization`,
+  `OpenAI-Project`, OpenRouter `HTTP-Referer`/`X-Title`, or custom auth headers).
+- This core client does not hard-code provider identities or capability rules.
+  Higher-level crates can layer provider-specific behavior on top.
 
 ---
 
@@ -404,28 +363,12 @@ pub struct ChatCompletionStream {
 
 ---
 
-## 7) Provider Compatibility Strategy
+## 7) Provider Extensions and Pass-through
 
-### 7.1 Capability-aware Request Shaping
-
-Before sending, apply per-provider and per-model rules:
-- Strip or reject unsupported fields (depending on `ParameterPolicy`).
-- Transform deprecated/compat fields (e.g., `max_tokens` -> `max_completion_tokens`).
-- Clamp values (e.g., Moonshot temperature <= 1.0).
-
-### 7.2 Compatibility Report
-
-```
-pub struct CompatibilityReport {
-    pub stripped_fields: Vec<&'static str>,
-    pub transformed_fields: Vec<(&'static str, &'static str)>,
-    pub warnings: Vec<Arc<str>>,
-}
-```
-
-`ApiResponse<T>` includes `meta.compatibility: Option<CompatibilityReport>`.
-
-### 7.3 Response Variations
+- The core client sends requests as provided; it does not strip, clamp, or
+  transform parameters for specific providers.
+- Provider-specific constraints should be handled by higher-level crates or
+  application code.
 - Preserve provider extensions via `#[serde(flatten)] extra` on response types.
 - Expose raw JSON for clients that need direct access:
   `ApiResponse::raw_json()`.
@@ -442,7 +385,6 @@ pub enum ClientError {
     Api(ApiError),
     Deserialize(DeserializeError),
     Stream(StreamError),
-    Capability(CapabilityError),
 }
 ```
 
@@ -454,7 +396,6 @@ pub enum ClientError {
 pub struct ResponseMeta {
     pub request_id: Option<Arc<str>>,
     pub ratelimit: Option<RateLimitInfo>,
-    pub compatibility: Option<CompatibilityReport>,
     pub latency_ms: Option<u64>,
 }
 
