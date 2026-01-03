@@ -44,6 +44,18 @@ POST /chat/completions
 
 Creates a model response for the given chat conversation.
 
+### Stored Completion Endpoints (requires `store: true`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/chat/completions/{id}` | Retrieve stored completion |
+| GET | `/chat/completions` | List stored completions (paginated) |
+| GET | `/chat/completions/{id}/messages` | List messages from stored completion |
+| POST | `/chat/completions/{id}` | Update metadata |
+| DELETE | `/chat/completions/{id}` | Delete stored completion |
+
+Pagination uses `after`, `limit`, and `order` parameters.
+
 ---
 
 ## Authentication
@@ -58,6 +70,24 @@ Optional organization header:
 ```
 OpenAI-Organization: YOUR_ORG_ID
 ```
+
+Optional project header:
+```
+OpenAI-Project: YOUR_PROJECT_ID
+```
+
+### Response Headers (Debugging)
+
+| Header | Description |
+|--------|-------------|
+| `x-request-id` | Request identifier for support/debugging |
+| `openai-processing-ms` | Server processing time |
+
+### Backward Compatibility
+
+Clients should implement forward-compatible JSON decoding:
+- Ignore unknown fields
+- Don't exhaustively match enums without a fallback
 
 ---
 
@@ -233,6 +263,7 @@ Result of a tool/function call.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `reasoning_effort` | string | "medium" | Reasoning depth: `"minimal"` (gpt-5 only), `"low"`, `"medium"`, `"high"`. |
+| `verbosity` | string | null | Output verbosity for supported models. |
 
 ### Optional Parameters - Multimodal
 
@@ -805,11 +836,15 @@ Check `usage.completion_tokens_details`:
 
 ### Retry Strategy
 
+**Transient errors (retry with backoff):** 429, 500, 502, 503
+**Permanent errors (do not retry):** 400, 401, 403, 404
+
 ```
 1. Wait: min(2^attempt * 1000ms, 60000ms) + random_jitter
 2. Max attempts: 5
 3. On 429: Check x-ratelimit-reset-* headers
 4. On 5xx: Always retry
+5. Always log x-request-id for diagnostics
 ```
 
 ---
@@ -926,6 +961,13 @@ Tokens refill on a rolling 60-second window, not all at once.
 - [ ] Reasoning model parameters
 - [ ] Service tier selection
 - [ ] Seed for reproducibility
+
+### Client Requirements
+- [ ] Keep-alive connections
+- [ ] Configurable request timeout
+- [ ] Forward-compatible JSON decoding (ignore unknown fields)
+- [ ] SSE parser with both connection-close and `[DONE]` termination
+- [ ] Parse `x-ratelimit-*` headers for adaptive throttling
 
 ---
 
