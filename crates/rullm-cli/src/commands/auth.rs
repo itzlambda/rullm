@@ -222,6 +222,7 @@ fn format_provider_display(provider: &Provider) -> &'static str {
         Provider::OpenAI => "OpenAI",
         Provider::Groq => "Groq",
         Provider::OpenRouter => "OpenRouter",
+        Provider::Gemini => "Gemini",
     }
 }
 

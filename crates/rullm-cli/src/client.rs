@@ -40,6 +40,7 @@ pub fn create_client(
         Provider::Groq => CliClient::groq(api_key, model_name, config),
         Provider::OpenRouter => CliClient::openrouter(api_key, model_name, config),
         Provider::Anthropic => CliClient::anthropic(api_key, model_name, config, is_oauth),
+        Provider::Gemini => CliClient::gemini(api_key, model_name, config),
     }
 }
 

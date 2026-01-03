@@ -61,6 +61,11 @@ pub enum CliClient {
         model: String,
         config: CliConfig,
     },
+    Gemini {
+        client: ChatCompletionsClient,
+        model: String,
+        config: CliConfig,
+    },
 }
 
 impl CliClient {
@@ -150,6 +155,25 @@ impl CliClient {
         })
     }
 
+    /// Create Gemini client (using OpenAI-compatible endpoint)
+    pub fn gemini(
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+        config: CliConfig,
+    ) -> Result<Self, CliError> {
+        let client_config = ClientConfig::builder()
+            .base_url("https://generativelanguage.googleapis.com/v1beta/openai")
+            .bearer_token(api_key.into())
+            .build()
+            .map_err(|e| CliError::Other(e.to_string()))?;
+        let client = ChatCompletionsClient::new(client_config)?;
+        Ok(Self::Gemini {
+            client,
+            model: model.into(),
+            config,
+        })
+    }
+
     /// Simple chat - send a message and get a response
     pub async fn chat(&self, message: &str) -> Result<String, CliError> {
         match self {
@@ -164,6 +188,11 @@ impl CliClient {
                 config,
             }
             | Self::OpenRouter {
+                client,
+                model,
+                config,
+            }
+            | Self::Gemini {
                 client,
                 model,
                 config,
@@ -230,6 +259,11 @@ impl CliClient {
                 config,
             }
             | Self::OpenRouter {
+                client,
+                model,
+                config,
+            }
+            | Self::Gemini {
                 client,
                 model,
                 config,
@@ -322,6 +356,7 @@ impl CliClient {
             Self::Anthropic { .. } => "anthropic",
             Self::Groq { .. } => "groq",
             Self::OpenRouter { .. } => "openrouter",
+            Self::Gemini { .. } => "gemini",
         }
     }
 
@@ -331,7 +366,8 @@ impl CliClient {
             Self::OpenAI { model, .. }
             | Self::Anthropic { model, .. }
             | Self::Groq { model, .. }
-            | Self::OpenRouter { model, .. } => model,
+            | Self::OpenRouter { model, .. }
+            | Self::Gemini { model, .. } => model,
         }
     }
 }
