@@ -13,7 +13,6 @@ rullm "What is the capital of France?"
 # Use different models with aliases
 rullm --model gpt4 "Explain quantum computing"
 rullm --model claude "Write a poem about the ocean"
-rullm --model gemini "What's the weather like?"
 
 # Use templates for structured queries ({{input}} placeholder is automatically filled)
 rullm -t code-review "Review this function"
@@ -32,7 +31,7 @@ rullm chat --model claude
 
 # Disable streaming for buffered output
 rullm --no-streaming "Write a poem about the ocean"
-rullm chat --no-streaming --model gemini
+rullm chat --no-streaming --model claude
 
 # Set up your API keys
 rullm keys set openai

@@ -8,7 +8,6 @@ pub enum Provider {
     Groq,
     OpenRouter,
     Anthropic,
-    Google,
 }
 
 impl std::fmt::Display for Provider {
@@ -18,7 +17,6 @@ impl std::fmt::Display for Provider {
             Provider::Groq => "groq",
             Provider::OpenRouter => "openrouter",
             Provider::Anthropic => "anthropic",
-            Provider::Google => "google",
         };
         write!(f, "{name}")
     }
@@ -26,13 +24,7 @@ impl std::fmt::Display for Provider {
 
 impl ValueEnum for Provider {
     fn value_variants<'a>() -> &'a [Self] {
-        &[
-            Self::OpenAI,
-            Self::Groq,
-            Self::OpenRouter,
-            Self::Anthropic,
-            Self::Google,
-        ]
+        &[Self::OpenAI, Self::Groq, Self::OpenRouter, Self::Anthropic]
     }
 
     fn to_possible_value(&self) -> Option<PossibleValue> {
@@ -41,7 +33,6 @@ impl ValueEnum for Provider {
             Self::Groq => PossibleValue::new("groq"),
             Self::OpenRouter => PossibleValue::new("openrouter"),
             Self::Anthropic => PossibleValue::new("anthropic"),
-            Self::Google => PossibleValue::new("google"),
         };
         Some(value)
     }
@@ -54,7 +45,6 @@ impl Provider {
             Provider::Groq => &["groq"],
             Provider::OpenRouter => &["openrouter"],
             Provider::Anthropic => &["anthropic", "claude"],
-            Provider::Google => &["google", "gemini"],
         }
     }
 
@@ -87,7 +77,6 @@ impl Provider {
             Provider::Groq => "GROQ_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Anthropic => "ANTHROPIC_API_KEY",
-            Provider::Google => "GOOGLE_AI_API_KEY",
         }
     }
 }

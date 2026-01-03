@@ -5,7 +5,7 @@
 //!
 //! ## Features
 //!
-//! - Multiple LLM Providers (OpenAI, Anthropic, Google AI)
+//! - Multiple LLM Providers (OpenAI, Anthropic)
 //! - Tower middleware with connection pooling and async/await
 //! - Rate limiting, timeouts, and error handling
 //! - Dual APIs: Simple string-based API and advanced API with full control
@@ -107,14 +107,12 @@
 //! The library includes streaming examples for each provider:
 //!
 //! - `openai_stream.rs` - OpenAI GPT models streaming
-//! - `anthropic_stream.rs` - Anthropic Claude models streaming  
-//! - `gemini_stream.rs` - Google Gemini models streaming
+//! - `anthropic_stream.rs` - Anthropic Claude models streaming
 //!
 //! Run examples with:
 //! ```bash
 //! cargo run --example openai_stream     # Requires OPENAI_API_KEY
 //! cargo run --example anthropic_stream  # Requires ANTHROPIC_API_KEY
-//! cargo run --example gemini_stream     # Requires GOOGLE_API_KEY
 //! ```
 //!
 //! ### Provider-Specific Streaming Features
@@ -123,7 +121,6 @@
 //! |----------|--------|--------------|
 //! | OpenAI | GPT-3.5, GPT-4 | Token counting, creative writing |
 //! | Anthropic | Claude 3 variants | Reasoning, code analysis |
-//! | Google | Gemini 1.5/2.0 | Multimodal, experimental models |
 //!
 //! ## Error Handling
 //!
@@ -155,7 +152,7 @@ pub mod providers;
 pub mod utils;
 
 // Concrete client exports
-pub use providers::{AnthropicClient, GoogleClient, OpenAIClient, OpenAICompatibleProvider};
+pub use providers::{AnthropicClient, OpenAIClient, OpenAICompatibleProvider};
 
 pub use config::{ConfigBuilder, HttpProviderConfig, ProviderConfig};
 pub use error::LlmError;

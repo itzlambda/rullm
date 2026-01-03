@@ -196,7 +196,7 @@ impl AliasResolver {
         }
 
         // Try to infer provider from model name patterns
-        for provider in [Provider::OpenAI, Provider::Anthropic, Provider::Google] {
+        for provider in [Provider::OpenAI, Provider::Anthropic] {
             for alias in provider.aliases() {
                 // Check if the model starts with an alias followed by a separator
                 if input.starts_with(&format!("{alias}-"))

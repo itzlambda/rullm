@@ -53,13 +53,6 @@ impl InfoArgs {
             ),
             output_level,
         );
-        crate::output::note(
-            &format!(
-                "GOOGLE_AI_API_KEY = {}",
-                env_var_status("GOOGLE_AI_API_KEY")
-            ),
-            output_level,
-        );
 
         crate::output::heading("\nVersion info:", output_level);
         crate::output::note(

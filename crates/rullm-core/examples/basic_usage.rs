@@ -43,10 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  • These compat_types are minimal types for OpenAI-compatible providers");
     println!("  • For full-featured OpenAI, use OpenAIClient with ChatCompletionRequest");
     println!("  • For Anthropic, use AnthropicClient with MessagesRequest");
-    println!("  • For Google, use GoogleClient with GenerateContentRequest");
-    println!(
-        "\nSee provider-specific examples (openai_simple, anthropic_simple, google_simple) for details."
-    );
+    println!("\nSee provider-specific examples (openai_simple, anthropic_simple) for details.");
 
     Ok(())
 }

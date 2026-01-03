@@ -33,7 +33,7 @@ const CHAT_EXAMPLES: &str = r#"EXAMPLES:
   rullm chat                               # Start chat with default model
   rullm chat -m openai/gpt-4              # Chat with GPT-4
   rullm chat -m claude                     # Chat using claude alias
-  rullm chat -m gemini/gemini-pro          # Chat with Gemini Pro"#;
+  rullm chat -m anthropic/claude-3-sonnet  # Chat with Claude Sonnet"#;
 
 const MODELS_EXAMPLES: &str = r#"EXAMPLES:
   rullm models list                        # List cached models

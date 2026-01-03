@@ -6,11 +6,10 @@
 use futures::StreamExt;
 use rullm_core::error::LlmError;
 use rullm_core::providers::anthropic::AnthropicConfig;
-use rullm_core::providers::google::GoogleAiConfig;
 use rullm_core::providers::openai_compatible::{
     OpenAICompatibleConfig, OpenAICompatibleProvider, OpenAIConfig, identities,
 };
-use rullm_core::providers::{AnthropicClient, GoogleClient, OpenAIClient};
+use rullm_core::providers::{AnthropicClient, OpenAIClient};
 use std::pin::Pin;
 
 /// Claude Code identification text for OAuth requests
@@ -56,11 +55,6 @@ pub enum CliClient {
         config: CliConfig,
         is_oauth: bool,
     },
-    Google {
-        client: GoogleClient,
-        model: String,
-        config: CliConfig,
-    },
     Groq {
         client: OpenAICompatibleProvider,
         model: String,
@@ -103,21 +97,6 @@ impl CliClient {
             model: model.into(),
             config,
             is_oauth: use_oauth,
-        })
-    }
-
-    /// Create Google client
-    pub fn google(
-        api_key: impl Into<String>,
-        model: impl Into<String>,
-        config: CliConfig,
-    ) -> Result<Self, LlmError> {
-        let client_config = GoogleAiConfig::new(api_key);
-        let client = GoogleClient::new(client_config)?;
-        Ok(Self::Google {
-            client,
-            model: model.into(),
-            config,
         })
     }
 
@@ -216,51 +195,6 @@ impl CliClient {
                     })
                     .collect::<Vec<_>>()
                     .join("");
-
-                Ok(content)
-            }
-            Self::Google {
-                client,
-                model,
-                config,
-            } => {
-                use rullm_core::providers::google::{
-                    Content, GenerateContentRequest, GenerationConfig,
-                };
-
-                let mut request = GenerateContentRequest::new(vec![Content::user(message)]);
-
-                if config.temperature.is_some() || config.max_tokens.is_some() {
-                    let gen_config = GenerationConfig {
-                        temperature: config.temperature,
-                        max_output_tokens: config.max_tokens,
-                        stop_sequences: None,
-                        top_p: None,
-                        top_k: None,
-                        response_mime_type: None,
-                        response_schema: None,
-                    };
-                    request.generation_config = Some(gen_config);
-                }
-
-                let response = client.generate_content(model, request).await?;
-                let content = response
-                    .candidates
-                    .first()
-                    .map(|c| {
-                        c.content
-                            .parts
-                            .iter()
-                            .filter_map(|part| match part {
-                                rullm_core::providers::google::Part::Text { text } => {
-                                    Some(text.clone())
-                                }
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>()
-                            .join("")
-                    })
-                    .ok_or_else(|| LlmError::model("No content in response"))?;
 
                 Ok(content)
             }
@@ -386,62 +320,6 @@ impl CliClient {
                     }
                 })))
             }
-            Self::Google {
-                client,
-                model,
-                config,
-            } => {
-                use rullm_core::providers::google::{
-                    Content, GenerateContentRequest, GenerationConfig,
-                };
-
-                let contents: Vec<Content> = messages
-                    .iter()
-                    .map(|(role, content)| match role.as_str() {
-                        "user" => Content::user(content),
-                        _ => Content::model(content),
-                    })
-                    .collect();
-
-                let mut request = GenerateContentRequest::new(contents);
-                if config.temperature.is_some() || config.max_tokens.is_some() {
-                    request.generation_config = Some(GenerationConfig {
-                        temperature: config.temperature,
-                        max_output_tokens: config.max_tokens,
-                        stop_sequences: None,
-                        top_p: None,
-                        top_k: None,
-                        response_mime_type: None,
-                        response_schema: None,
-                    });
-                }
-
-                let stream = client.stream_generate_content(model, request).await?;
-                Ok(Box::pin(stream.filter_map(|response_result| async move {
-                    match response_result {
-                        Ok(response) => response
-                            .candidates
-                            .first()
-                            .map(|candidate| {
-                                let text = candidate
-                                    .content
-                                    .parts
-                                    .iter()
-                                    .filter_map(|part| match part {
-                                        rullm_core::providers::google::Part::Text { text } => {
-                                            Some(text.clone())
-                                        }
-                                        _ => None,
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join("");
-                                Ok(text)
-                            })
-                            .filter(|s| matches!(s, Ok(t) if !t.is_empty())),
-                        Err(e) => Some(Err(e)),
-                    }
-                })))
-            }
             Self::Groq {
                 client,
                 model,
@@ -491,7 +369,6 @@ impl CliClient {
         match self {
             Self::OpenAI { .. } => "openai",
             Self::Anthropic { .. } => "anthropic",
-            Self::Google { .. } => "google",
             Self::Groq { .. } => "groq",
             Self::OpenRouter { .. } => "openrouter",
         }
@@ -502,7 +379,6 @@ impl CliClient {
         match self {
             Self::OpenAI { model, .. }
             | Self::Anthropic { model, .. }
-            | Self::Google { model, .. }
             | Self::Groq { model, .. }
             | Self::OpenRouter { model, .. } => model,
         }

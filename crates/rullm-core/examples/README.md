@@ -1,6 +1,6 @@
 # LLM Provider Examples
 
-This directory contains examples demonstrating how to use the OpenAI, Anthropic, and Google AI providers in the LLM library.
+This directory contains examples demonstrating how to use the OpenAI and Anthropic providers in the LLM library.
 
 ## Prerequisites
 
@@ -11,14 +11,10 @@ This directory contains examples demonstrating how to use the OpenAI, Anthropic,
    export OPENAI_ORGANIZATION="org-123"  # Optional
    export OPENAI_PROJECT="proj-456"      # Optional
    export OPENAI_BASE_URL="https://custom-endpoint.com/v1"  # Optional
-   
+
    # Anthropic
    export ANTHROPIC_API_KEY="sk-ant-your-actual-api-key"
    export ANTHROPIC_BASE_URL="https://custom-endpoint.com"  # Optional
-   
-   # Google AI
-   export GOOGLE_AI_API_KEY="your-google-ai-api-key"
-   export GOOGLE_AI_BASE_URL="https://custom-endpoint.com"  # Optional
    ```
 
 2. **Install dependencies:**
@@ -118,41 +114,6 @@ let mut stream = provider
 - Creative content: 0.7-1.0 for variety
 - Balanced conversation: 0.6-0.7
 
-### 3. Google Gemini Streaming (`gemini_stream.rs`)
-
-**Run:** `cargo run --example gemini_stream`
-
-**Environment:** Requires `GOOGLE_API_KEY`
-
-Shows Gemini streaming with:
-- **Technical explanations** with precision
-- **Creative writing** using experimental models
-- **Code analysis** and review capabilities
-- **Model comparison** between Gemini variants
-- **Sentence counting** and response analysis
-
-**Code snippet:**
-```rust
-let request = ChatRequestBuilder::new()
-    .system("You are a helpful AI assistant built by Google.")
-    .user("Explain machine learning in simple terms.")
-    .temperature(0.7)
-    .max_tokens(150)
-    .stream(true)
-    .build();
-
-let mut stream = provider
-    .chat_completion_stream(request, "gemini-1.5-flash", None)
-    .await;
-
-// Handle streaming events...
-```
-
-**Models used:** 
-- `gemini-1.5-flash` (fast responses)
-- `gemini-1.5-pro` (balanced performance)  
-- `gemini-2.0-flash-exp` (experimental features)
-
 ### Streaming API Patterns
 
 **Event handling:**
@@ -202,8 +163,7 @@ cargo build --examples
 
 # Test individual streaming examples
 cargo run --example openai_stream     # Requires OPENAI_API_KEY
-cargo run --example anthropic_stream  # Requires ANTHROPIC_API_KEY  
-cargo run --example gemini_stream     # Requires GOOGLE_API_KEY
+cargo run --example anthropic_stream  # Requires ANTHROPIC_API_KEY
 
 # Run lint checks
 cargo clippy --all-targets --all-features
@@ -396,14 +356,13 @@ Comprehensive test that validates all LLM providers with health checks:
 # Set up your API keys
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
-export GOOGLE_API_KEY="..."
 
 # Run the comprehensive test
 cargo run --example test_all_providers
 ```
 
 **Features:**
-- Tests OpenAI, Anthropic, and Google providers
+- Tests OpenAI and Anthropic providers
 - Performs health checks
 - Provides detailed success/failure reporting
 - Gracefully handles missing API keys
@@ -422,7 +381,6 @@ cargo run --example test_all_providers
 ├─────────────┼────────┤
 │ OpenAI      │ ✅ Pass │
 │ Anthropic   │ ✅ Pass │
-│ Google      │ ✅ Pass │
 └─────────────┴────────┘
 
 🎉 All providers are working correctly!

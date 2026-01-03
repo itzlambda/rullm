@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::providers::{AnthropicConfig, GoogleAiConfig, OpenAICompatibleConfig, OpenAIConfig};
+use crate::providers::{AnthropicConfig, OpenAICompatibleConfig, OpenAIConfig};
 
 /// Configuration trait for LLM providers
 pub trait ProviderConfig: Send + Sync {
@@ -127,22 +127,6 @@ impl ConfigBuilder {
         let mut config = AnthropicConfig::new(api_key);
 
         if let Ok(base_url) = std::env::var("ANTHROPIC_BASE_URL") {
-            config = config.with_base_url(base_url);
-        }
-
-        config.validate()?;
-        Ok(config)
-    }
-
-    /// Create Google AI config from environment
-    pub fn google_ai_from_env() -> Result<GoogleAiConfig, crate::error::LlmError> {
-        let api_key = std::env::var("GOOGLE_AI_API_KEY").map_err(|_| {
-            crate::error::LlmError::configuration("GOOGLE_AI_API_KEY environment variable not set")
-        })?;
-
-        let mut config = GoogleAiConfig::new(api_key);
-
-        if let Ok(base_url) = std::env::var("GOOGLE_AI_BASE_URL") {
             config = config.with_base_url(base_url);
         }
 

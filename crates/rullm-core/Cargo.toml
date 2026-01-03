@@ -51,10 +51,6 @@ name = "anthropic_simple"
 path = "examples/anthropic_simple.rs"
 
 [[example]]
-name = "google_simple"
-path = "examples/google_simple.rs"
-
-[[example]]
 name = "openai_conversation"
 path = "examples/openai_conversation.rs"
 

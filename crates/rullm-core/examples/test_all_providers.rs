@@ -1,5 +1,4 @@
 use rullm_core::providers::anthropic::{AnthropicClient, AnthropicConfig};
-use rullm_core::providers::google::{GoogleAiConfig, GoogleClient};
 use rullm_core::providers::openai::OpenAIClient;
 use rullm_core::providers::openai_compatible::OpenAIConfig;
 use std::env;
@@ -35,20 +34,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             println!("❌ Anthropic: Failed - {e}");
             results.push(("Anthropic", false));
-        }
-    }
-    println!();
-
-    // 3. Test Google Provider
-    println!("🔍 Testing Google Provider...");
-    match test_google_provider().await {
-        Ok(()) => {
-            println!("✅ Google: Health check passed");
-            results.push(("Google", true));
-        }
-        Err(e) => {
-            println!("❌ Google: Failed - {e}");
-            results.push(("Google", false));
         }
     }
     println!();
@@ -100,22 +85,6 @@ async fn test_anthropic_provider() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = AnthropicConfig::new(api_key);
     let client = AnthropicClient::new(config)?;
-
-    // Test health check
-    match client.health_check().await {
-        Ok(_) => println!("   Health check: ✅ Passed"),
-        Err(e) => println!("   Health check: ⚠️  Warning - {e}"),
-    }
-
-    Ok(())
-}
-
-async fn test_google_provider() -> Result<(), Box<dyn std::error::Error>> {
-    let api_key =
-        env::var("GOOGLE_API_KEY").map_err(|_| "GOOGLE_API_KEY environment variable not set")?;
-
-    let config = GoogleAiConfig::new(api_key);
-    let client = GoogleClient::new(config)?;
 
     // Test health check
     match client.health_check().await {

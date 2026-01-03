@@ -97,8 +97,6 @@ pub struct AuthConfig {
     pub groq: Option<Credential>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub openrouter: Option<Credential>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub google: Option<Credential>,
 }
 
 impl AuthConfig {
@@ -164,7 +162,6 @@ impl AuthConfig {
             Provider::OpenAI => self.openai.as_ref(),
             Provider::Groq => self.groq.as_ref(),
             Provider::OpenRouter => self.openrouter.as_ref(),
-            Provider::Google => self.google.as_ref(),
         }
     }
 
@@ -175,7 +172,6 @@ impl AuthConfig {
             Provider::OpenAI => &mut self.openai,
             Provider::Groq => &mut self.groq,
             Provider::OpenRouter => &mut self.openrouter,
-            Provider::Google => &mut self.google,
         }
     }
 
