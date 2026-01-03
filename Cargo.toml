@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/rullm-core", "crates/rullm-cli", "crates/rullm-openai", "crates/rullm-anthropic"]
+members = ["crates/rullm-cli", "crates/rullm-chat-completion", "crates/rullm-anthropic"]
 resolver = "2"
 
 [workspace.package]

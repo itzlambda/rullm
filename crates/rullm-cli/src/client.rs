@@ -2,9 +2,8 @@ use super::provider::Provider;
 use crate::args::{Cli, CliConfig};
 use crate::auth;
 use crate::cli_client::{CliClient, CliConfig as CoreCliConfig};
+use crate::error::CliError;
 use anyhow::{Context, Result};
-
-use rullm_core::LlmError;
 
 pub fn create_client(
     provider: &Provider,
@@ -13,7 +12,7 @@ pub fn create_client(
     cli: &Cli,
     model_name: &str,
     is_oauth: bool,
-) -> Result<CliClient, LlmError> {
+) -> Result<CliClient, CliError> {
     // Build CoreCliConfig based on CLI args
     let mut config = CoreCliConfig::default();
 

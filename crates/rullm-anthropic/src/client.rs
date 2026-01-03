@@ -152,7 +152,8 @@ impl MessagesClient {
         &self,
         mut request: MessagesRequest,
         options: RequestOptions,
-    ) -> Result<MessageStream<impl Stream<Item = Result<StreamEvent>> + Unpin>> {
+    ) -> Result<MessageStream<impl Stream<Item = Result<StreamEvent>> + Unpin + Send + 'static>>
+    {
         // Force streaming
         request.stream = Some(true);
 

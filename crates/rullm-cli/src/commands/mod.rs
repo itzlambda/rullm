@@ -1,9 +1,9 @@
 use clap::Subcommand;
 
 use crate::cli_client::CliClient;
+use crate::error::CliError;
 use anyhow::Result;
 use futures::StreamExt;
-use rullm_core::LlmError;
 use std::io::{self, Write};
 
 use crate::spinner::Spinner;
@@ -117,7 +117,7 @@ pub async fn run_single_query(
     query: &str,
     system_prompt: Option<&str>,
     streaming: bool,
-) -> Result<(), LlmError> {
+) -> Result<(), CliError> {
     if streaming {
         // Use token-by-token streaming for real-time output
         if let Some(_system) = system_prompt {
@@ -162,7 +162,7 @@ pub async fn run_single_query(
                                 print!("{token}");
                                 io::stdout()
                                     .flush()
-                                    .map_err(|e| LlmError::unknown(e.to_string()))?;
+                                    .map_err(|e| CliError::unknown(e.to_string()))?;
                             }
                             Err(err) => {
                                 spinner.stop_and_replace(&format!("Error: {err}\n"));
