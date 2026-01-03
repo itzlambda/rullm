@@ -1726,10 +1726,33 @@ dependencies = [
 [[package]]
 name = "rullm-anthropic"
 version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "futures",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-test",
+]
 
 [[package]]
 name = "rullm-chat-completion"
 version = "0.1.0"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "futures",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-test",
+ "tracing",
+]
 
 [[package]]
 name = "rullm-cli"
@@ -1790,10 +1813,6 @@ dependencies = [
  "tower-service",
  "tracing-subscriber",
 ]
-
-[[package]]
-name = "rullm-gemini"
-version = "0.1.0"
 
 [[package]]
 name = "rustc-demangle"
