@@ -91,7 +91,15 @@ impl CliClient {
     ) -> Result<Self, CliError> {
         let api_key_str = api_key.into();
         let client_config = if use_oauth {
-            AnthropicClient::builder().auth_token(api_key_str).build()?
+            AnthropicClient::builder()
+                .auth_token(api_key_str)
+                .betas([
+                    "oauth-2025-04-20",
+                    "claude-code-20250219",
+                    "interleaved-thinking-2025-05-14",
+                    "fine-grained-tool-streaming-2025-05-14",
+                ])
+                .build()?
         } else {
             AnthropicClient::builder().api_key(api_key_str).build()?
         };
