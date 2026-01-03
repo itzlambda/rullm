@@ -15,6 +15,27 @@ use std::pin::Pin;
 /// Claude Code identification text for OAuth requests
 const CLAUDE_CODE_SPOOF_TEXT: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 
+/// Extract system messages from conversation, concatenating multiple with double newlines.
+/// Returns None if no system messages present.
+fn extract_system_content(messages: &[(String, String)]) -> Option<String> {
+    let system_messages: Vec<&str> = messages
+        .iter()
+        .filter_map(|(role, content)| {
+            if role == "system" {
+                Some(content.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if system_messages.is_empty() {
+        None
+    } else {
+        Some(system_messages.join("\n\n"))
+    }
+}
+
 /// Prepend Claude Code system block to an existing system prompt (for OAuth requests)
 fn prepend_claude_code_system(existing: Option<SystemContent>) -> SystemContent {
     let spoof_block = SystemBlock::text_with_cache(CLAUDE_CODE_SPOOF_TEXT);
@@ -305,12 +326,16 @@ impl CliClient {
                 config,
                 is_oauth,
             } => {
+                // Extract system messages first (they go in a top-level field, not in messages)
+                let user_system = extract_system_content(&messages);
+
+                // Filter to only user/assistant messages
                 let msgs: Vec<AnthropicMessage> = messages
                     .iter()
                     .filter_map(|(role, content)| match role.as_str() {
                         "user" => Some(AnthropicMessage::user(content.as_str())),
                         "assistant" => Some(AnthropicMessage::assistant(content.as_str())),
-                        _ => None, // Skip system messages for now
+                        _ => None,
                     })
                     .collect();
 
@@ -322,8 +347,27 @@ impl CliClient {
                     builder = builder.temperature(temp);
                 }
 
-                if *is_oauth {
-                    builder = builder.system_blocks(prepend_claude_code_system(None).into_blocks());
+                // Attach system content (combining with OAuth prefix if needed)
+                let system_content = match (user_system, *is_oauth) {
+                    (Some(text), true) => {
+                        // OAuth + user system: prepend Claude Code to user's system
+                        Some(prepend_claude_code_system(Some(SystemContent::Text(
+                            text.into(),
+                        ))))
+                    }
+                    (Some(text), false) => {
+                        // No OAuth + user system: just user's system
+                        Some(SystemContent::Text(text.into()))
+                    }
+                    (None, true) => {
+                        // OAuth + no user system: just Claude Code
+                        Some(prepend_claude_code_system(None))
+                    }
+                    (None, false) => None,
+                };
+
+                if let Some(content) = system_content {
+                    builder = builder.system_blocks(content.into_blocks());
                 }
 
                 let request = builder.build();
