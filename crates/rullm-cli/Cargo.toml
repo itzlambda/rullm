@@ -8,10 +8,12 @@ rust-version.workspace = true
 default = []
 
 [dependencies]
-# Depend on the lib crate
-rullm-core = { package = "rullm-core", path = "../rullm-core" }
+# Provider crates
+rullm-anthropic = { path = "../rullm-anthropic" }
+rullm-chat-completion = { path = "../rullm-chat-completion" }
 
 futures.workspace = true
+async-stream.workspace = true
 
 # CLI-specific dependencies
 clap.workspace = true
@@ -29,6 +31,7 @@ strum_macros.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
+thiserror.workspace = true
 reedline.workspace = true
 tempfile.workspace = true
 

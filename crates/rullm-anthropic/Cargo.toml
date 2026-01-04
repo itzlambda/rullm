@@ -1,0 +1,18 @@
+[package]
+name = "rullm-anthropic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+reqwest = { workspace = true }
+bytes = { workspace = true }
+serde = { workspace = true, features = ["rc"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+async-stream = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

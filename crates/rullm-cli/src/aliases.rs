@@ -1,7 +1,7 @@
 use crate::constants::ALIASES_CONFIG_FILE;
+use crate::error::CliError;
 
 use super::provider::Provider;
-use rullm_core::error::LlmError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -16,7 +16,7 @@ pub struct UserAliasConfig {
 
 impl UserAliasConfig {
     /// Load user aliases from a TOML file
-    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, LlmError> {
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, CliError> {
         let path = path.as_ref();
 
         if !path.exists() {
@@ -24,7 +24,7 @@ impl UserAliasConfig {
         }
 
         let content = std::fs::read_to_string(path)
-            .map_err(|e| LlmError::validation(format!("Failed to read alias config: {e}")))?;
+            .map_err(|e| CliError::validation(format!("Failed to read alias config: {e}")))?;
 
         // Handle empty files gracefully
         if content.trim().is_empty() {
@@ -32,22 +32,22 @@ impl UserAliasConfig {
         }
 
         toml::from_str(&content)
-            .map_err(|e| LlmError::validation(format!("Failed to parse alias config: {e}")))
+            .map_err(|e| CliError::validation(format!("Failed to parse alias config: {e}")))
     }
 
     /// Save user aliases to a TOML file
-    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), LlmError> {
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), CliError> {
         let path = path.as_ref();
 
         // Create directory if it doesn't exist
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                LlmError::validation(format!("Failed to create config directory: {e}"))
+                CliError::validation(format!("Failed to create config directory: {e}"))
             })?;
         }
 
         let content = toml::to_string_pretty(self)
-            .map_err(|e| LlmError::validation(format!("Failed to serialize alias config: {e}")))?;
+            .map_err(|e| CliError::validation(format!("Failed to serialize alias config: {e}")))?;
 
         // Ensure we always have the [aliases] section even if empty
         let content = if self.aliases.is_empty() {
@@ -57,11 +57,11 @@ impl UserAliasConfig {
         };
 
         std::fs::write(path, content)
-            .map_err(|e| LlmError::validation(format!("Failed to write alias config: {e}")))
+            .map_err(|e| CliError::validation(format!("Failed to write alias config: {e}")))
     }
 
     /// Add a new alias
-    pub fn add_alias(&mut self, alias: &str, target: &str) -> Result<(), LlmError> {
+    pub fn add_alias(&mut self, alias: &str, target: &str) -> Result<(), CliError> {
         // Validate the target format
         Self::validate_target(target)?;
 
@@ -76,21 +76,21 @@ impl UserAliasConfig {
     }
 
     /// Validate that a target is in valid provider:model format
-    fn validate_target(target: &str) -> Result<(), LlmError> {
+    fn validate_target(target: &str) -> Result<(), CliError> {
         if let Some((provider_str, model_name)) = target.split_once(':') {
             if Provider::from_alias(provider_str).is_none() {
-                return Err(LlmError::validation(format!(
+                return Err(CliError::validation(format!(
                     "Invalid provider '{provider_str}' in target '{target}'"
                 )));
             }
             if model_name.trim().is_empty() {
-                return Err(LlmError::validation(format!(
+                return Err(CliError::validation(format!(
                     "Model name cannot be empty in target '{target}'"
                 )));
             }
             Ok(())
         } else {
-            Err(LlmError::validation(format!(
+            Err(CliError::validation(format!(
                 "Target '{target}' must be in 'provider:model' format"
             )))
         }
@@ -138,9 +138,9 @@ impl AliasResolver {
     /// 3. Check default aliases
     /// 4. Try pattern inference
     /// 5. Error if unresolvable
-    pub fn resolve(&self, input: &str) -> Result<(Provider, String), LlmError> {
+    pub fn resolve(&self, input: &str) -> Result<(Provider, String), CliError> {
         if input.trim().is_empty() {
-            return Err(LlmError::validation("Input cannot be empty".to_string()));
+            return Err(CliError::validation("Input cannot be empty".to_string()));
         }
 
         let normalized_input = if self.case_insensitive {
@@ -154,7 +154,7 @@ impl AliasResolver {
             if let Some(provider) = Provider::from_alias(provider_str) {
                 return Ok((provider, model_name.to_string()));
             } else {
-                return Err(LlmError::validation(format!(
+                return Err(CliError::validation(format!(
                     "Unknown provider prefix: '{provider_str}'"
                 )));
             }
@@ -170,33 +170,33 @@ impl AliasResolver {
     }
 
     /// Parse a target string to (Provider, model)
-    fn parse_target(&self, target: &str) -> Result<(Provider, String), LlmError> {
+    fn parse_target(&self, target: &str) -> Result<(Provider, String), CliError> {
         if let Some((provider_str, model_name)) = target.split_once(':') {
             if let Some(provider) = Provider::from_alias(provider_str) {
                 Ok((provider, model_name.to_string()))
             } else {
-                Err(LlmError::validation(format!(
+                Err(CliError::validation(format!(
                     "Unknown provider '{provider_str}' in target '{target}'"
                 )))
             }
         } else {
-            Err(LlmError::validation(format!(
+            Err(CliError::validation(format!(
                 "Invalid target format '{target}', expected 'provider:model'"
             )))
         }
     }
 
     /// Fallback pattern inference using existing logic
-    fn infer_from_pattern(&self, input: &str) -> Result<(Provider, String), LlmError> {
+    fn infer_from_pattern(&self, input: &str) -> Result<(Provider, String), CliError> {
         // Check if input is just a provider name (should error)
         if Provider::from_alias(input).is_some() {
-            return Err(LlmError::validation(format!(
+            return Err(CliError::validation(format!(
                 "Input '{input}' is a provider name, not a model. Use format 'provider:model' or a specific model alias."
             )));
         }
 
         // Try to infer provider from model name patterns
-        for provider in [Provider::OpenAI, Provider::Anthropic, Provider::Google] {
+        for provider in [Provider::OpenAI, Provider::Anthropic] {
             for alias in provider.aliases() {
                 // Check if the model starts with an alias followed by a separator
                 if input.starts_with(&format!("{alias}-"))
@@ -209,7 +209,7 @@ impl AliasResolver {
             }
         }
 
-        Err(LlmError::validation(format!(
+        Err(CliError::validation(format!(
             "Unable to determine provider for model: '{input}'. Use format 'provider:model' or a recognized alias."
         )))
     }

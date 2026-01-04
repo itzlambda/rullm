@@ -3,35 +3,51 @@
 //! This module provides a simple enum wrapper for CLI usage that supports
 //! basic chat operations without exposing the full complexity of each provider's API.
 
+use crate::error::CliError;
 use futures::StreamExt;
-use rullm_core::error::LlmError;
-use rullm_core::providers::anthropic::AnthropicConfig;
-use rullm_core::providers::google::GoogleAiConfig;
-use rullm_core::providers::openai_compatible::{
-    OpenAICompatibleConfig, OpenAICompatibleProvider, OpenAIConfig, identities,
+use rullm_anthropic::{
+    Client as AnthropicClient, Message as AnthropicMessage, MessagesRequest, RequestOptions,
+    SystemBlock, SystemContent,
 };
-use rullm_core::providers::{AnthropicClient, GoogleClient, OpenAIClient};
+use rullm_chat_completion::{ChatCompletionsClient, ClientConfig, Message as ChatMessage};
 use std::pin::Pin;
 
 /// Claude Code identification text for OAuth requests
 const CLAUDE_CODE_SPOOF_TEXT: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 
-/// Prepend Claude Code system block to an existing system prompt (for OAuth requests)
-fn prepend_claude_code_system(
-    existing: Option<rullm_core::providers::anthropic::SystemPrompt>,
-) -> rullm_core::providers::anthropic::SystemPrompt {
-    use rullm_core::providers::anthropic::{SystemBlock, SystemPrompt};
+/// Extract system messages from conversation, concatenating multiple with double newlines.
+/// Returns None if no system messages present.
+fn extract_system_content(messages: &[(String, String)]) -> Option<String> {
+    let system_messages: Vec<&str> = messages
+        .iter()
+        .filter_map(|(role, content)| {
+            if role == "system" {
+                Some(content.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
 
+    if system_messages.is_empty() {
+        None
+    } else {
+        Some(system_messages.join("\n\n"))
+    }
+}
+
+/// Prepend Claude Code system block to an existing system prompt (for OAuth requests)
+fn prepend_claude_code_system(existing: Option<SystemContent>) -> SystemContent {
     let spoof_block = SystemBlock::text_with_cache(CLAUDE_CODE_SPOOF_TEXT);
 
     match existing {
-        None => SystemPrompt::Blocks(vec![spoof_block]),
-        Some(SystemPrompt::Text(text)) => {
-            SystemPrompt::Blocks(vec![spoof_block, SystemBlock::text(text)])
+        None => SystemContent::Blocks(vec![spoof_block]),
+        Some(SystemContent::Text(text)) => {
+            SystemContent::Blocks(vec![spoof_block, SystemBlock::text(text)])
         }
-        Some(SystemPrompt::Blocks(mut blocks)) => {
+        Some(SystemContent::Blocks(mut blocks)) => {
             blocks.insert(0, spoof_block);
-            SystemPrompt::Blocks(blocks)
+            SystemContent::Blocks(blocks)
         }
     }
 }
@@ -46,7 +62,7 @@ pub struct CliConfig {
 /// CLI adapter enum that wraps concrete provider clients
 pub enum CliClient {
     OpenAI {
-        client: OpenAIClient,
+        client: ChatCompletionsClient,
         model: String,
         config: CliConfig,
     },
@@ -56,18 +72,18 @@ pub enum CliClient {
         config: CliConfig,
         is_oauth: bool,
     },
-    Google {
-        client: GoogleClient,
-        model: String,
-        config: CliConfig,
-    },
     Groq {
-        client: OpenAICompatibleProvider,
+        client: ChatCompletionsClient,
         model: String,
         config: CliConfig,
     },
     OpenRouter {
-        client: OpenAICompatibleProvider,
+        client: ChatCompletionsClient,
+        model: String,
+        config: CliConfig,
+    },
+    Gemini {
+        client: ChatCompletionsClient,
         model: String,
         config: CliConfig,
     },
@@ -79,9 +95,12 @@ impl CliClient {
         api_key: impl Into<String>,
         model: impl Into<String>,
         config: CliConfig,
-    ) -> Result<Self, LlmError> {
-        let client_config = OpenAIConfig::new(api_key);
-        let client = OpenAIClient::new(client_config)?;
+    ) -> Result<Self, CliError> {
+        let client_config = ClientConfig::builder()
+            .bearer_token(api_key.into())
+            .build()
+            .map_err(|e| CliError::Other(e.to_string()))?;
+        let client = ChatCompletionsClient::new(client_config)?;
         Ok(Self::OpenAI {
             client,
             model: model.into(),
@@ -95,29 +114,27 @@ impl CliClient {
         model: impl Into<String>,
         config: CliConfig,
         use_oauth: bool,
-    ) -> Result<Self, LlmError> {
-        let client_config = AnthropicConfig::new(api_key).with_oauth(use_oauth);
-        let client = AnthropicClient::new(client_config)?;
+    ) -> Result<Self, CliError> {
+        let api_key_str = api_key.into();
+        let client_config = if use_oauth {
+            AnthropicClient::builder()
+                .auth_token(api_key_str)
+                .betas([
+                    "oauth-2025-04-20",
+                    "claude-code-20250219",
+                    "interleaved-thinking-2025-05-14",
+                    "fine-grained-tool-streaming-2025-05-14",
+                ])
+                .build()?
+        } else {
+            AnthropicClient::builder().api_key(api_key_str).build()?
+        };
+        let anthropic_client = AnthropicClient::new(client_config)?;
         Ok(Self::Anthropic {
-            client,
+            client: anthropic_client,
             model: model.into(),
             config,
             is_oauth: use_oauth,
-        })
-    }
-
-    /// Create Google client
-    pub fn google(
-        api_key: impl Into<String>,
-        model: impl Into<String>,
-        config: CliConfig,
-    ) -> Result<Self, LlmError> {
-        let client_config = GoogleAiConfig::new(api_key);
-        let client = GoogleClient::new(client_config)?;
-        Ok(Self::Google {
-            client,
-            model: model.into(),
-            config,
         })
     }
 
@@ -126,9 +143,13 @@ impl CliClient {
         api_key: impl Into<String>,
         model: impl Into<String>,
         config: CliConfig,
-    ) -> Result<Self, LlmError> {
-        let client_config = OpenAICompatibleConfig::groq(api_key);
-        let client = OpenAICompatibleProvider::new(client_config, identities::GROQ)?;
+    ) -> Result<Self, CliError> {
+        let client_config = ClientConfig::builder()
+            .base_url("https://api.groq.com/openai/v1")
+            .bearer_token(api_key.into())
+            .build()
+            .map_err(|e| CliError::Other(e.to_string()))?;
+        let client = ChatCompletionsClient::new(client_config)?;
         Ok(Self::Groq {
             client,
             model: model.into(),
@@ -141,9 +162,13 @@ impl CliClient {
         api_key: impl Into<String>,
         model: impl Into<String>,
         config: CliConfig,
-    ) -> Result<Self, LlmError> {
-        let client_config = OpenAICompatibleConfig::openrouter(api_key);
-        let client = OpenAICompatibleProvider::new(client_config, identities::OPENROUTER)?;
+    ) -> Result<Self, CliError> {
+        let client_config = ClientConfig::builder()
+            .base_url("https://openrouter.ai/api/v1")
+            .bearer_token(api_key.into())
+            .build()
+            .map_err(|e| CliError::Other(e.to_string()))?;
+        let client = ChatCompletionsClient::new(client_config)?;
         Ok(Self::OpenRouter {
             client,
             model: model.into(),
@@ -151,120 +176,34 @@ impl CliClient {
         })
     }
 
+    /// Create Gemini client (using OpenAI-compatible endpoint)
+    pub fn gemini(
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+        config: CliConfig,
+    ) -> Result<Self, CliError> {
+        let client_config = ClientConfig::builder()
+            .base_url("https://generativelanguage.googleapis.com/v1beta/openai")
+            .bearer_token(api_key.into())
+            .build()
+            .map_err(|e| CliError::Other(e.to_string()))?;
+        let client = ChatCompletionsClient::new(client_config)?;
+        Ok(Self::Gemini {
+            client,
+            model: model.into(),
+            config,
+        })
+    }
+
     /// Simple chat - send a message and get a response
-    pub async fn chat(&self, message: &str) -> Result<String, LlmError> {
+    pub async fn chat(&self, message: &str) -> Result<String, CliError> {
         match self {
             Self::OpenAI {
                 client,
                 model,
                 config,
-            } => {
-                use rullm_core::providers::openai::{ChatCompletionRequest, ChatMessage};
-
-                let mut request =
-                    ChatCompletionRequest::new(model, vec![ChatMessage::user(message)]);
-
-                if let Some(temp) = config.temperature {
-                    request.temperature = Some(temp);
-                }
-                if let Some(max) = config.max_tokens {
-                    request.max_tokens = Some(max);
-                }
-
-                let response = client.chat_completion(request).await?;
-                let content = response
-                    .choices
-                    .first()
-                    .and_then(|c| c.message.content.as_ref())
-                    .and_then(|c| match c {
-                        rullm_core::providers::openai::MessageContent::Text(t) => Some(t.clone()),
-                        _ => None,
-                    })
-                    .ok_or_else(|| LlmError::model("No content in response"))?;
-
-                Ok(content)
             }
-            Self::Anthropic {
-                client,
-                model,
-                config,
-                is_oauth,
-            } => {
-                use rullm_core::providers::anthropic::{Message, MessagesRequest};
-
-                let max_tokens = config.max_tokens.unwrap_or(1024);
-                let mut request =
-                    MessagesRequest::new(model, vec![Message::user(message)], max_tokens);
-
-                if let Some(temp) = config.temperature {
-                    request.temperature = Some(temp);
-                }
-
-                if *is_oauth {
-                    request.system = Some(prepend_claude_code_system(request.system.take()));
-                }
-
-                let response = client.messages(request).await?;
-                let content = response
-                    .content
-                    .iter()
-                    .filter_map(|block| match block {
-                        rullm_core::providers::anthropic::ContentBlock::Text { text } => {
-                            Some(text.clone())
-                        }
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("");
-
-                Ok(content)
-            }
-            Self::Google {
-                client,
-                model,
-                config,
-            } => {
-                use rullm_core::providers::google::{
-                    Content, GenerateContentRequest, GenerationConfig,
-                };
-
-                let mut request = GenerateContentRequest::new(vec![Content::user(message)]);
-
-                if config.temperature.is_some() || config.max_tokens.is_some() {
-                    let gen_config = GenerationConfig {
-                        temperature: config.temperature,
-                        max_output_tokens: config.max_tokens,
-                        stop_sequences: None,
-                        top_p: None,
-                        top_k: None,
-                        response_mime_type: None,
-                        response_schema: None,
-                    };
-                    request.generation_config = Some(gen_config);
-                }
-
-                let response = client.generate_content(model, request).await?;
-                let content = response
-                    .candidates
-                    .first()
-                    .map(|c| {
-                        c.content
-                            .parts
-                            .iter()
-                            .filter_map(|part| match part {
-                                rullm_core::providers::google::Part::Text { text } => {
-                                    Some(text.clone())
-                                }
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>()
-                            .join("")
-                    })
-                    .ok_or_else(|| LlmError::model("No content in response"))?;
-
-                Ok(content)
-            }
-            Self::Groq {
+            | Self::Groq {
                 client,
                 model,
                 config,
@@ -273,20 +212,52 @@ impl CliClient {
                 client,
                 model,
                 config,
+            }
+            | Self::Gemini {
+                client,
+                model,
+                config,
             } => {
-                use rullm_core::{ChatRequestBuilder, ChatRole};
-
-                let mut request = ChatRequestBuilder::new().add_message(ChatRole::User, message);
+                let mut builder = client.chat().model(model.as_str()).user(message);
 
                 if let Some(temp) = config.temperature {
-                    request = request.temperature(temp);
+                    builder = builder.temperature(temp);
                 }
                 if let Some(max) = config.max_tokens {
-                    request = request.max_tokens(max);
+                    builder = builder.max_completion_tokens(max);
                 }
 
-                let response = client.chat_completion(request.build(), model).await?;
-                Ok(response.message.content)
+                let response = builder.send().await?;
+                response
+                    .data
+                    .first_text()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| CliError::Other("No content in response".to_string()))
+            }
+            Self::Anthropic {
+                client,
+                model,
+                config,
+                is_oauth,
+            } => {
+                let max_tokens = config.max_tokens.unwrap_or(1024);
+                let mut builder = MessagesRequest::builder(model.as_str(), max_tokens)
+                    .message(AnthropicMessage::user(message));
+
+                if let Some(temp) = config.temperature {
+                    builder = builder.temperature(temp);
+                }
+
+                if *is_oauth {
+                    builder = builder.system_blocks(prepend_claude_code_system(None).into_blocks());
+                }
+
+                let request = builder.build();
+                let response = client
+                    .messages()
+                    .create(request, RequestOptions::default())
+                    .await?;
+                Ok(response.text())
             }
         }
     }
@@ -295,53 +266,57 @@ impl CliClient {
     pub async fn stream_chat_raw(
         &self,
         messages: Vec<(String, String)>, // (role, content) pairs
-    ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<String, LlmError>> + Send>>, LlmError>
+    ) -> Result<Pin<Box<dyn futures::Stream<Item = Result<String, CliError>> + Send>>, CliError>
     {
         match self {
             Self::OpenAI {
                 client,
                 model,
                 config,
+            }
+            | Self::Groq {
+                client,
+                model,
+                config,
+            }
+            | Self::OpenRouter {
+                client,
+                model,
+                config,
+            }
+            | Self::Gemini {
+                client,
+                model,
+                config,
             } => {
-                use rullm_core::providers::openai::{ChatCompletionRequest, ChatMessage, Role};
+                let mut builder = client.chat().model(model.as_str());
 
-                let msgs: Vec<ChatMessage> = messages
-                    .iter()
-                    .map(|(role, content)| {
-                        let r = match role.as_str() {
-                            "system" => Role::System,
-                            "user" => Role::User,
-                            "assistant" => Role::Assistant,
-                            _ => Role::User,
-                        };
-                        ChatMessage {
-                            role: r,
-                            content: Some(rullm_core::providers::openai::MessageContent::Text(
-                                content.clone(),
-                            )),
-                            name: None,
-                            tool_calls: None,
-                            tool_call_id: None,
-                        }
-                    })
-                    .collect();
+                for (role, content) in &messages {
+                    let msg = match role.as_str() {
+                        "system" => ChatMessage::system(content.as_str()),
+                        "user" => ChatMessage::user(content.as_str()),
+                        "assistant" => ChatMessage::assistant(content.as_str()),
+                        _ => ChatMessage::user(content.as_str()),
+                    };
+                    builder = builder.message(msg);
+                }
 
-                let mut request = ChatCompletionRequest::new(model, msgs);
                 if let Some(temp) = config.temperature {
-                    request.temperature = Some(temp);
+                    builder = builder.temperature(temp);
                 }
                 if let Some(max) = config.max_tokens {
-                    request.max_tokens = Some(max);
+                    builder = builder.max_completion_tokens(max);
                 }
 
-                let stream = client.chat_completion_stream(request).await?;
+                let stream = builder.stream().await?;
                 Ok(Box::pin(stream.filter_map(|chunk_result| async move {
                     match chunk_result {
                         Ok(chunk) => chunk
                             .choices
                             .first()
-                            .and_then(|choice| choice.delta.content.clone().map(Ok)),
-                        Err(e) => Some(Err(e)),
+                            .and_then(|choice| choice.delta.content.as_ref())
+                            .map(|content| Ok(content.to_string())),
+                        Err(e) => Some(Err(CliError::ChatCompletion(e))),
                     }
                 })))
             }
@@ -351,137 +326,69 @@ impl CliClient {
                 config,
                 is_oauth,
             } => {
-                use rullm_core::providers::anthropic::{Message, MessagesRequest};
+                // Extract system messages first (they go in a top-level field, not in messages)
+                let user_system = extract_system_content(&messages);
 
-                let msgs: Vec<Message> = messages
+                // Filter to only user/assistant messages
+                let msgs: Vec<AnthropicMessage> = messages
                     .iter()
-                    .filter_map(|(role, content)| {
-                        match role.as_str() {
-                            "user" => Some(Message::user(content)),
-                            "assistant" => Some(Message::assistant(content)),
-                            _ => None, // Skip system messages for now
-                        }
+                    .filter_map(|(role, content)| match role.as_str() {
+                        "user" => Some(AnthropicMessage::user(content.as_str())),
+                        "assistant" => Some(AnthropicMessage::assistant(content.as_str())),
+                        _ => None,
                     })
                     .collect();
 
                 let max_tokens = config.max_tokens.unwrap_or(1024);
-                let mut request = MessagesRequest::new(model, msgs, max_tokens);
-                if let Some(temp) = config.temperature {
-                    request.temperature = Some(temp);
-                }
-
-                if *is_oauth {
-                    request.system = Some(prepend_claude_code_system(request.system.take()));
-                }
-
-                let stream = client.messages_stream(request).await?;
-                Ok(Box::pin(stream.filter_map(|event_result| async move {
-                    match event_result {
-                        Ok(rullm_core::providers::anthropic::StreamEvent::ContentBlockDelta {
-                            delta: rullm_core::providers::anthropic::Delta::TextDelta { text },
-                            ..
-                        }) => Some(Ok(text)),
-                        Ok(_) => None,
-                        Err(e) => Some(Err(e)),
-                    }
-                })))
-            }
-            Self::Google {
-                client,
-                model,
-                config,
-            } => {
-                use rullm_core::providers::google::{
-                    Content, GenerateContentRequest, GenerationConfig,
-                };
-
-                let contents: Vec<Content> = messages
-                    .iter()
-                    .map(|(role, content)| match role.as_str() {
-                        "user" => Content::user(content),
-                        _ => Content::model(content),
-                    })
-                    .collect();
-
-                let mut request = GenerateContentRequest::new(contents);
-                if config.temperature.is_some() || config.max_tokens.is_some() {
-                    request.generation_config = Some(GenerationConfig {
-                        temperature: config.temperature,
-                        max_output_tokens: config.max_tokens,
-                        stop_sequences: None,
-                        top_p: None,
-                        top_k: None,
-                        response_mime_type: None,
-                        response_schema: None,
-                    });
-                }
-
-                let stream = client.stream_generate_content(model, request).await?;
-                Ok(Box::pin(stream.filter_map(|response_result| async move {
-                    match response_result {
-                        Ok(response) => response
-                            .candidates
-                            .first()
-                            .map(|candidate| {
-                                let text = candidate
-                                    .content
-                                    .parts
-                                    .iter()
-                                    .filter_map(|part| match part {
-                                        rullm_core::providers::google::Part::Text { text } => {
-                                            Some(text.clone())
-                                        }
-                                        _ => None,
-                                    })
-                                    .collect::<Vec<_>>()
-                                    .join("");
-                                Ok(text)
-                            })
-                            .filter(|s| matches!(s, Ok(t) if !t.is_empty())),
-                        Err(e) => Some(Err(e)),
-                    }
-                })))
-            }
-            Self::Groq {
-                client,
-                model,
-                config,
-            }
-            | Self::OpenRouter {
-                client,
-                model,
-                config,
-            } => {
-                use rullm_core::{ChatRequestBuilder, ChatRole, ChatStreamEvent};
-
-                let mut builder = ChatRequestBuilder::new();
-                for (role, content) in messages {
-                    let r = match role.as_str() {
-                        "system" => ChatRole::System,
-                        "user" => ChatRole::User,
-                        "assistant" => ChatRole::Assistant,
-                        _ => ChatRole::User,
-                    };
-                    builder = builder.add_message(r, content);
-                }
+                let mut builder =
+                    MessagesRequest::builder(model.as_str(), max_tokens).messages(msgs.into_iter());
 
                 if let Some(temp) = config.temperature {
                     builder = builder.temperature(temp);
                 }
-                if let Some(max) = config.max_tokens {
-                    builder = builder.max_tokens(max);
+
+                // Attach system content (combining with OAuth prefix if needed)
+                let system_content = match (user_system, *is_oauth) {
+                    (Some(text), true) => {
+                        // OAuth + user system: prepend Claude Code to user's system
+                        Some(prepend_claude_code_system(Some(SystemContent::Text(
+                            text.into(),
+                        ))))
+                    }
+                    (Some(text), false) => {
+                        // No OAuth + user system: just user's system
+                        Some(SystemContent::Text(text.into()))
+                    }
+                    (None, true) => {
+                        // OAuth + no user system: just Claude Code
+                        Some(prepend_claude_code_system(None))
+                    }
+                    (None, false) => None,
+                };
+
+                if let Some(content) = system_content {
+                    builder = builder.system_blocks(content.into_blocks());
                 }
 
-                let stream = client
-                    .chat_completion_stream(builder.build(), model, None)
-                    .await;
-                Ok(Box::pin(stream.filter_map(|event_result| async move {
-                    match event_result {
-                        Ok(ChatStreamEvent::Token(token)) => Some(Ok(token)),
-                        Ok(_) => None,
-                        Err(e) => Some(Err(e)),
+                let request = builder.build();
+                let messages_client = client.messages();
+                let stream = messages_client
+                    .stream(request, RequestOptions::default())
+                    .await?;
+
+                // Use text_stream() which provides a cleaner interface for text-only streaming
+                let text_stream = stream.text_stream();
+
+                Ok(Box::pin(async_stream::stream! {
+                    use std::pin::pin;
+                    let mut stream = pin!(text_stream);
+                    while let Some(result) = stream.next().await {
+                        match result {
+                            Ok(text) => yield Ok(text.to_string()),
+                            Err(e) => yield Err(CliError::Anthropic(e)),
+                        }
                     }
-                })))
+                }))
             }
         }
     }
@@ -491,9 +398,9 @@ impl CliClient {
         match self {
             Self::OpenAI { .. } => "openai",
             Self::Anthropic { .. } => "anthropic",
-            Self::Google { .. } => "google",
             Self::Groq { .. } => "groq",
             Self::OpenRouter { .. } => "openrouter",
+            Self::Gemini { .. } => "gemini",
         }
     }
 
@@ -502,9 +409,23 @@ impl CliClient {
         match self {
             Self::OpenAI { model, .. }
             | Self::Anthropic { model, .. }
-            | Self::Google { model, .. }
             | Self::Groq { model, .. }
-            | Self::OpenRouter { model, .. } => model,
+            | Self::OpenRouter { model, .. }
+            | Self::Gemini { model, .. } => model,
+        }
+    }
+}
+
+// Helper trait for SystemContent
+trait SystemContentExt {
+    fn into_blocks(self) -> Vec<SystemBlock>;
+}
+
+impl SystemContentExt for SystemContent {
+    fn into_blocks(self) -> Vec<SystemBlock> {
+        match self {
+            SystemContent::Text(text) => vec![SystemBlock::text(text)],
+            SystemContent::Blocks(blocks) => blocks,
         }
     }
 }

@@ -1,9 +1,9 @@
 use clap::Subcommand;
 
 use crate::cli_client::CliClient;
+use crate::error::CliError;
 use anyhow::Result;
 use futures::StreamExt;
-use rullm_core::LlmError;
 use std::io::{self, Write};
 
 use crate::spinner::Spinner;
@@ -33,7 +33,7 @@ const CHAT_EXAMPLES: &str = r#"EXAMPLES:
   rullm chat                               # Start chat with default model
   rullm chat -m openai/gpt-4              # Chat with GPT-4
   rullm chat -m claude                     # Chat using claude alias
-  rullm chat -m gemini/gemini-pro          # Chat with Gemini Pro"#;
+  rullm chat -m anthropic/claude-3-sonnet  # Chat with Claude Sonnet"#;
 
 const MODELS_EXAMPLES: &str = r#"EXAMPLES:
   rullm models list                        # List cached models
@@ -117,7 +117,7 @@ pub async fn run_single_query(
     query: &str,
     system_prompt: Option<&str>,
     streaming: bool,
-) -> Result<(), LlmError> {
+) -> Result<(), CliError> {
     if streaming {
         // Use token-by-token streaming for real-time output
         if let Some(_system) = system_prompt {
@@ -162,7 +162,7 @@ pub async fn run_single_query(
                                 print!("{token}");
                                 io::stdout()
                                     .flush()
-                                    .map_err(|e| LlmError::unknown(e.to_string()))?;
+                                    .map_err(|e| CliError::unknown(e.to_string()))?;
                             }
                             Err(err) => {
                                 spinner.stop_and_replace(&format!("Error: {err}\n"));

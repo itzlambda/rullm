@@ -23,7 +23,7 @@ const CLI_EXAMPLES: &str = r#"EXAMPLES:
   rullm -t code-review "Review this code"         # Use template for query
   rullm -t greeting "Hello"                     # Template with input parameter
   rullm chat                                      # Start interactive chat
-  rullm chat -m gemini/gemini-pro                # Chat with specific model
+  rullm chat -m anthropic/claude-3-sonnet        # Chat with specific model
   rullm chat --no-streaming -m claude            # Interactive chat without streaming"#;
 
 /// Helper function to remove quotes from values, eliminating duplication
@@ -118,7 +118,7 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    /// Model to use in format: provider/model-name (e.g., openai/gpt-4, gemini/gemini-pro, anthropic/claude-3-sonnet)
+    /// Model to use in format: provider/model-name (e.g., openai/gpt-4, anthropic/claude-3-sonnet)
     #[arg(short, long, add = ArgValueCompleter::new(model_completer))]
     pub model: Option<String>,
 
@@ -181,7 +181,7 @@ impl Models {
 
 pub fn model_completer(current: &OsStr) -> Vec<CompletionCandidate> {
     // Predefined providers or aliases
-    const PROVIDED: &[&str] = &["openai:", "anthropic:", "google:"];
+    const PROVIDED: &[&str] = &["openai:", "anthropic:", "gemini:"];
 
     let cli_config = CliConfig::load();
     let cur_str = current.to_string_lossy();

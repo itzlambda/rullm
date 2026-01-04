@@ -2,9 +2,8 @@ use super::provider::Provider;
 use crate::args::{Cli, CliConfig};
 use crate::auth;
 use crate::cli_client::{CliClient, CliConfig as CoreCliConfig};
+use crate::error::CliError;
 use anyhow::{Context, Result};
-
-use rullm_core::LlmError;
 
 pub fn create_client(
     provider: &Provider,
@@ -13,7 +12,7 @@ pub fn create_client(
     cli: &Cli,
     model_name: &str,
     is_oauth: bool,
-) -> Result<CliClient, LlmError> {
+) -> Result<CliClient, CliError> {
     // Build CoreCliConfig based on CLI args
     let mut config = CoreCliConfig::default();
 
@@ -41,7 +40,7 @@ pub fn create_client(
         Provider::Groq => CliClient::groq(api_key, model_name, config),
         Provider::OpenRouter => CliClient::openrouter(api_key, model_name, config),
         Provider::Anthropic => CliClient::anthropic(api_key, model_name, config, is_oauth),
-        Provider::Google => CliClient::google(api_key, model_name, config),
+        Provider::Gemini => CliClient::gemini(api_key, model_name, config),
     }
 }
 
